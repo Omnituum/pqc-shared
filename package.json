@@ -1,0 +1,85 @@
+{
+  "name": "@omnituum/pqc-shared",
+  "version": "0.2.0",
+  "description": "Omnituum PQC Shared Library - Crypto, Vault, File Encryption, and Utilities",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./crypto": {
+      "types": "./dist/crypto/index.d.ts",
+      "import": "./dist/crypto/index.js",
+      "require": "./dist/crypto/index.cjs"
+    },
+    "./vault": {
+      "types": "./dist/vault/index.d.ts",
+      "import": "./dist/vault/index.js",
+      "require": "./dist/vault/index.cjs"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "import": "./dist/utils/index.js",
+      "require": "./dist/utils/index.cjs"
+    },
+    "./fs": {
+      "types": "./dist/fs/index.d.ts",
+      "import": "./dist/fs/index.js",
+      "require": "./dist/fs/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test:golden:generate": "tsx tests/golden/generate-vectors.ts",
+    "test:golden:verify": "tsx tests/golden/verify-vectors.ts",
+    "test:golden": "npm run test:golden:verify",
+    "pretest": "npm run build"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^0.5.3",
+    "@noble/hashes": "^1.8.0",
+    "@noble/post-quantum": "^0.2.1",
+    "hash-wasm": "^4.11.0",
+    "kyber-crystals": "^1.0.7",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [
+    "pqc",
+    "post-quantum",
+    "cryptography",
+    "kyber",
+    "x25519",
+    "hybrid-encryption",
+    "vault",
+    "file-encryption",
+    "argon2",
+    "aes-gcm"
+  ],
+  "author": "Omnituum",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Omnituum/pqc-shared.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Omnituum/pqc-shared/issues"
+  },
+  "homepage": "https://github.com/Omnituum/pqc-shared#readme"
+}

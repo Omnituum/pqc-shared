@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Local data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+.env.*
+.env.local
+
+# IDE / Editor
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test artifacts (regenerate with pnpm test:golden:generate)
+tests/golden/*.json
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
