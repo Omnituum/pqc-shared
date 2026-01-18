@@ -42,8 +42,8 @@
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "test:golden:generate": "tsx tests/golden/generate-vectors.ts",
-    "test:golden:verify": "tsx tests/golden/verify-vectors.ts",
+    "test:golden:generate": "pnpm -s build && tsx tests/golden/generate-vectors.ts",
+    "test:golden:verify": "pnpm -s build && tsx tests/golden/verify-vectors.ts",
     "test:golden": "npm run test:golden:verify",
     "pretest": "npm run build"
   },
