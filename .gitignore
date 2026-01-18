@@ -28,9 +28,6 @@ data/
 .DS_Store
 Thumbs.db
 
-# Test artifacts (regenerate with pnpm test:golden:generate)
-tests/golden/*.json
-
 # Logs
 *.log
 npm-debug.log*
