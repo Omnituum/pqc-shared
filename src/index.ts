@@ -1,3 +1,6 @@
+// Ensure globalThis.crypto exists in Node environments
+import './runtime/crypto';
+
 /**
  * Omnituum PQC Shared
  *
