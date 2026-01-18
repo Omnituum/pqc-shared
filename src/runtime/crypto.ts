@@ -1,15 +1,16 @@
 // src/runtime/crypto.ts
 // Ensure globalThis.crypto exists across Node + browsers.
+// Uses dynamic import so bundlers don't try to resolve Node built-ins.
 
-import { webcrypto as nodeWebcrypto } from 'crypto';
-
-export function ensureCrypto(): void {
-  // Browser already has it
+export async function ensureCrypto(): Promise<void> {
   if (typeof globalThis.crypto !== 'undefined') return;
 
-  // Node: attach WebCrypto
-  (globalThis as any).crypto = nodeWebcrypto as unknown as Crypto;
+  // Node: attach WebCrypto at runtime
+  const mod: any = await import('node:crypto');
+  const webcrypto = mod.webcrypto ?? mod.default?.webcrypto;
+  if (!webcrypto) throw new Error('WebCrypto not available in this Node runtime');
+  (globalThis as any).crypto = webcrypto as unknown as Crypto;
 }
 
-// Run on import
-ensureCrypto();
+// fire-and-forget (works for your library init pattern)
+void ensureCrypto();
