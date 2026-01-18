@@ -18,6 +18,34 @@ npm install @omnituum/pqc-shared
 pnpm add @omnituum/pqc-shared
 ```
 
+## Supported Environments
+
+`@omnituum/pqc-shared` is designed to run in both Node.js and modern browsers.
+
+- **Node.js:** 18, 20, 22
+- **Browsers:** modern Chromium / Firefox / Safari with WebCrypto support
+
+### Cryptographic runtime behavior
+
+- In browsers, the library uses **WebCrypto** (`globalThis.crypto`) when available.
+- In Node.js, the library uses **Node built-ins** (e.g. `crypto`) as a fallback when WebCrypto globals are unavailable.
+
+If you bundle for the browser, ensure your bundler targets web environments and does not force Node polyfills unless explicitly intended.
+
+## Non-Goals
+
+This package provides **cryptographic primitives and utilities**. It does **not** provide:
+
+- Custodial services, hosting, or key escrow
+- User authentication, identity proofing, or account recovery
+- Network transport, relays, or message delivery guarantees
+- Compliance certification (audit/compliance is handled at the system + deployment layer)
+
+## Security Status
+
+This repository is **pre-audit**. It includes golden test vectors for regression detection.
+If you plan to use this library in high-stakes environments, perform an independent review and validate the threat model for your deployment.
+
 ## Quick Start
 
 ### Hybrid Encryption

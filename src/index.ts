@@ -9,6 +9,13 @@ import './runtime/crypto';
  *
  * FROZEN CONTRACTS - see pqc-docs/specs/ for format specifications.
  *
+ * ## API Stability
+ *
+ * Exports are annotated with stability markers:
+ * - `@stable` — Supported and semver-governed. Breaking changes only in major versions.
+ * - `@experimental` — May change in minor/patch releases until stabilized.
+ * - `@internal` — Not part of the public API surface; do not depend on these.
+ *
  * @example
  * ```ts
  * // Hybrid Encryption
