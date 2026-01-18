@@ -33,11 +33,13 @@ export {
   hybridDecrypt,
   hybridDecryptToString,
   getPublicKeys,
+  getSecretKeys,
 } from './crypto/hybrid';
 
 export type {
   HybridIdentity,
   HybridPublicKeys,
+  HybridSecretKeys,
   HybridEnvelope,
 } from './crypto/hybrid';
 
@@ -123,6 +125,7 @@ export type {
 export {
   createEmptyVault,
   createIdentity,
+  addIdentity,
   encryptVault,
   decryptVault,
 } from './vault';
@@ -151,6 +154,18 @@ export type {
   MigrationOptions,
   MigrationResult,
 } from './vault';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTEGRITY UTILITIES (@stable)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * @stable Integrity hashing and key fingerprinting.
+ */
+export {
+  computeIntegrityHash,
+  computeKeyFingerprint,
+} from './utils';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // KEY DERIVATION (@stable)
