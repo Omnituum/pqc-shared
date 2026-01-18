@@ -39,7 +39,21 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check if version exists
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if npm view @omnituum/pqc-shared@$VERSION version >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Version $VERSION already published"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Version $VERSION not yet published"
+          fi
+
       - name: Publish (provenance)
+        if: steps.version.outputs.exists == 'false'
         run: pnpm publish --access public --provenance --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
