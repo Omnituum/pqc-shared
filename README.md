@@ -4,11 +4,11 @@ Post-Quantum Cryptography library for hybrid encryption, identity management, an
 
 ## Features
 
-- **Hybrid Encryption** — X25519 + Kyber-768 dual-layer security
-- **Post-Quantum Signatures** — Dilithium ML-DSA-65 (NIST Level 3)
+- **Hybrid Encryption** — X25519 + ML-KEM-768 (Kyber) dual-layer security
+- **Post-Quantum Signatures** — ML-DSA-65 (Dilithium) via `@noble/post-quantum`
 - **Identity Vault** — Encrypted storage with Argon2id key derivation
 - **File Encryption** — `.oqe` format with hybrid or password-based modes
-- **Browser Compatible** — Pure JavaScript, no Node.js dependencies
+- **Cross-Platform** — Works in Node.js and modern browsers; no native bindings
 
 ## Installation
 
@@ -46,6 +46,15 @@ This package provides **cryptographic primitives and utilities**. It does **not*
 This repository is **pre-audit**. It includes golden test vectors for regression detection.
 If you plan to use this library in high-stakes environments, perform an independent review and validate the threat model for your deployment.
 
+## API Stability
+
+Exports are annotated with stability markers:
+
+- **`@stable`** — Supported and semver-governed. Breaking changes only in major versions.
+- **`@experimental`** — May change in minor/patch releases until stabilized.
+
+The public API surface is the root exports (`@omnituum/pqc-shared`). Subpath exports (`/crypto`, `/vault`, `/fs`, `/utils`) may evolve faster and are intended for advanced use cases.
+
 ## Quick Start
 
 ### Hybrid Encryption
@@ -54,7 +63,7 @@ If you plan to use this library in high-stakes environments, perform an independ
 import {
   generateHybridIdentity,
   hybridEncrypt,
-  hybridDecrypt,
+  hybridDecryptToString,
   getPublicKeys,
 } from '@omnituum/pqc-shared';
 
@@ -71,7 +80,7 @@ const envelope = await hybridEncrypt(
 );
 
 // Bob decrypts with his secret keys
-const plaintext = await hybridDecrypt(envelope, bob);
+const plaintext = await hybridDecryptToString(envelope, bob);
 console.log(plaintext); // "Hello, Bob!"
 ```
 
@@ -87,8 +96,8 @@ import {
 const keypair = await generateDilithiumKeypair();
 const message = new TextEncoder().encode('Sign this message');
 
-const signature = await dilithiumSign(message, keypair.secretKeyB64);
-const valid = await dilithiumVerify(message, signature, keypair.publicKeyB64);
+const { signature } = await dilithiumSign(message, keypair.secretB64);
+const valid = await dilithiumVerify(message, signature, keypair.publicB64);
 console.log(valid); // true
 ```
 
@@ -97,7 +106,7 @@ console.log(valid); // true
 ```typescript
 import {
   createEmptyVault,
-  createIdentity,
+  generateHybridIdentity,
   addIdentity,
   encryptVault,
   decryptVault,
@@ -105,7 +114,7 @@ import {
 
 // Create and populate vault
 let vault = createEmptyVault();
-const identity = await createIdentity('My Identity');
+const identity = await generateHybridIdentity('My Identity');
 vault = addIdentity(vault, identity);
 
 // Encrypt vault with password (uses Argon2id)
@@ -117,10 +126,12 @@ const decrypted = await decryptVault(encrypted, 'my-password');
 
 ### File Encryption
 
+> **Note:** File encryption APIs accept browser `File`/`Blob` objects. For Node.js usage, use `Uint8Array` with the underlying hybrid encryption functions directly.
+
 ```typescript
 import { encryptFile, decryptFile } from '@omnituum/pqc-shared';
 
-// Encrypt file for recipient
+// Encrypt file for recipient (browser)
 const result = await encryptFile(fileData, recipientPublicKeys, senderIdentity, {
   filename: 'document.pdf',
   mimeType: 'application/pdf',
@@ -147,7 +158,7 @@ console.log(decrypted.metadata.filename); // "document.pdf"
 | `getPublicKeys(identity)` | Extract public keys from identity |
 | `getSecretKeys(identity)` | Extract secret keys from identity |
 
-### Kyber ML-KEM-768
+### ML-KEM-768 (Kyber)
 
 | Function | Description |
 |----------|-------------|
@@ -426,12 +437,14 @@ import { ... } from '@omnituum/pqc-shared/utils';
 
 ### Post-Quantum Security
 
-This library implements NIST-selected post-quantum algorithms:
+This library implements post-quantum algorithms based on NIST standards:
 
-- **Kyber ML-KEM-768** — Key encapsulation mechanism (NIST Level 3)
-- **Dilithium ML-DSA-65** — Digital signatures (NIST Level 3)
+- **ML-KEM-768** (FIPS 203) — Key encapsulation mechanism, via `kyber-crystals`
+- **ML-DSA-65** (FIPS 204) — Digital signatures, via `@noble/post-quantum`
 
-Hybrid encryption combines classical (X25519) and post-quantum (Kyber) algorithms. Both must decrypt successfully, providing defense-in-depth.
+Hybrid encryption combines classical (X25519, RFC 7748) and post-quantum (ML-KEM) algorithms. Both must decrypt successfully, providing defense-in-depth.
+
+> **Note:** This library is pre-audit. "Implements" means we use these algorithms via dependencies; it does not imply FIPS certification or compliance program participation.
 
 ### Key Derivation
 
@@ -486,9 +499,9 @@ if (constantTimeEqual(hash1, hash2)) { ... }
 |---------|---------|
 | `@noble/ciphers` | ChaCha20-Poly1305 AEAD |
 | `@noble/hashes` | SHA-256, BLAKE3, HMAC, HKDF |
-| `@noble/post-quantum` | Dilithium ML-DSA-65 |
+| `@noble/post-quantum` | ML-DSA-65 (Dilithium) signatures |
 | `hash-wasm` | Argon2id (WebAssembly) |
-| `kyber-crystals` | Kyber ML-KEM-768 |
+| `kyber-crystals` | ML-KEM-768 (Kyber) |
 | `tweetnacl` | NaCl box/secretbox, X25519 |
 
 All dependencies are pure JavaScript/WebAssembly with no native bindings.
