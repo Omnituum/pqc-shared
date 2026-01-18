@@ -1,17 +1,19 @@
 name: Publish
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write # required for provenance
+  packages: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      id-token: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,26 +23,23 @@ jobs:
         with:
           version: 9
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
 
-      - name: Install dependencies
+      - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
 
       - name: Build
         run: pnpm build
 
-      - name: Generate test vectors
-        run: pnpm test:golden:generate
-
-      - name: Run golden tests
-        run: pnpm test:golden:verify
-
-      - name: Publish to npm
-        run: pnpm publish --access public --provenance
+      - name: Publish (provenance)
+        run: pnpm publish --access public --provenance --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
