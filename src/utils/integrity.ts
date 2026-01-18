@@ -45,12 +45,22 @@ function computeStringHash(str: string): string {
 }
 
 /**
- * Compute SHA-256 hash asynchronously using Web Crypto.
+ * Compute SHA-256 hash asynchronously using Web Crypto or Node fallback.
  */
 export async function computeHashAsync(data: string): Promise<string> {
   const encoder = new TextEncoder();
-  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', encoder.encode(data));
-  return toHex(new Uint8Array(hashBuffer));
+  const bytes = encoder.encode(data);
+
+  // Browser/WebCrypto path
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle) {
+    const hashBuffer = await subtle.digest('SHA-256', bytes);
+    return toHex(new Uint8Array(hashBuffer));
+  }
+
+  // Node fallback (always available, no async shim dependency)
+  const { createHash } = await import('node:crypto');
+  return toHex(new Uint8Array(createHash('sha256').update(bytes).digest()));
 }
 
 /**
