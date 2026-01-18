@@ -1,7 +1,7 @@
 // src/runtime/crypto.ts
 // Ensure globalThis.crypto exists across Node + browsers.
 
-import { webcrypto as nodeWebcrypto } from 'node:crypto';
+import { webcrypto as nodeWebcrypto } from 'crypto';
 
 export function ensureCrypto(): void {
   // Browser already has it
