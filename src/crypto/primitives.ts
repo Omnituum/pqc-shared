@@ -69,19 +69,19 @@ export function assertLen(label: string, arr: Uint8Array, n: number): void {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function rand32(): Uint8Array {
-  return crypto.getRandomValues(new Uint8Array(32));
+  return globalThis.crypto.getRandomValues(new Uint8Array(32));
 }
 
 export function rand24(): Uint8Array {
-  return crypto.getRandomValues(new Uint8Array(24));
+  return globalThis.crypto.getRandomValues(new Uint8Array(24));
 }
 
 export function rand12(): Uint8Array {
-  return crypto.getRandomValues(new Uint8Array(12));
+  return globalThis.crypto.getRandomValues(new Uint8Array(12));
 }
 
 export function randN(n: number): Uint8Array {
-  return crypto.getRandomValues(new Uint8Array(n));
+  return globalThis.crypto.getRandomValues(new Uint8Array(n));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

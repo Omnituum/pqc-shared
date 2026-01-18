@@ -41,7 +41,7 @@ export async function deriveKey(
   iterations: number = PBKDF2_ITERATIONS
 ): Promise<CryptoKey> {
   // Import password as raw key material
-  const passwordKey = await crypto.subtle.importKey(
+  const passwordKey = await globalThis.crypto.subtle.importKey(
     'raw',
     textEncoder.encode(password),
     'PBKDF2',
@@ -53,7 +53,7 @@ export async function deriveKey(
   // Create a clean ArrayBuffer to ensure type compatibility
   const saltArrayBuffer = new ArrayBuffer(salt.length);
   new Uint8Array(saltArrayBuffer).set(salt);
-  return crypto.subtle.deriveKey(
+  return globalThis.crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt: saltArrayBuffer,
@@ -86,8 +86,8 @@ export async function encryptVault(
   password: string
 ): Promise<EncryptedVaultFile> {
   // Generate random salt (32 bytes) and IV (12 bytes for GCM)
-  const salt = crypto.getRandomValues(new Uint8Array(32));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const salt = globalThis.crypto.getRandomValues(new Uint8Array(32));
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
 
   // Derive encryption key
   const key = await deriveKey(password, salt);
@@ -96,7 +96,7 @@ export async function encryptVault(
   const plaintext = textEncoder.encode(JSON.stringify(vault));
 
   // Encrypt with AES-256-GCM
-  const ciphertext = await crypto.subtle.encrypt(
+  const ciphertext = await globalThis.crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
     plaintext
@@ -164,8 +164,8 @@ export async function encryptVaultV2(
   password: string
 ): Promise<EncryptedVaultFileV2> {
   // Generate random salt (32 bytes) and IV (12 bytes for GCM)
-  const salt = crypto.getRandomValues(new Uint8Array(32));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const salt = globalThis.crypto.getRandomValues(new Uint8Array(32));
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
 
   // Derive key using Argon2id
   const keyBytes = await kdfDeriveKey(password, salt, KDF_CONFIG_ARGON2ID);
@@ -175,7 +175,7 @@ export async function encryptVaultV2(
   new Uint8Array(keyBuffer).set(keyBytes);
 
   // Import key for AES-GCM
-  const key = await crypto.subtle.importKey(
+  const key = await globalThis.crypto.subtle.importKey(
     'raw',
     keyBuffer,
     { name: 'AES-GCM', length: 256 },
@@ -187,7 +187,7 @@ export async function encryptVaultV2(
   const plaintext = textEncoder.encode(JSON.stringify(vault));
 
   // Encrypt with AES-256-GCM
-  const ciphertext = await crypto.subtle.encrypt(
+  const ciphertext = await globalThis.crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
     plaintext

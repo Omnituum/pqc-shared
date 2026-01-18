@@ -250,8 +250,8 @@ export function getSession(): VaultSession {
 export async function unlockSession(password: string, vault: OmnituumVault): Promise<boolean> {
   try {
     // Verify password by attempting to encrypt/decrypt
-    const salt = crypto.getRandomValues(new Uint8Array(32));
-    const passwordKey = await crypto.subtle.importKey(
+    const salt = globalThis.crypto.getRandomValues(new Uint8Array(32));
+    const passwordKey = await globalThis.crypto.subtle.importKey(
       'raw',
       new TextEncoder().encode(password),
       'PBKDF2',
@@ -259,7 +259,7 @@ export async function unlockSession(password: string, vault: OmnituumVault): Pro
       ['deriveBits', 'deriveKey']
     );
 
-    const sessionKey = await crypto.subtle.deriveKey(
+    const sessionKey = await globalThis.crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
         salt,
@@ -322,6 +322,6 @@ async function getDeviceFingerprint(): Promise<string> {
     new Date().getTimezoneOffset(),
   ].join('|');
 
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+  const hash = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
   return toHex(new Uint8Array(hash)).slice(0, 16);
 }

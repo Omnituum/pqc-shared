@@ -46,7 +46,7 @@ export async function importAesKey(keyBytes: Uint8Array): Promise<CryptoKey> {
     throw new Error(`AES key must be ${AES_KEY_SIZE} bytes, got ${keyBytes.length}`);
   }
 
-  return crypto.subtle.importKey(
+  return globalThis.crypto.subtle.importKey(
     'raw',
     toArrayBuffer(keyBytes),
     { name: 'AES-GCM', length: 256 },
@@ -61,7 +61,7 @@ export async function importAesKey(keyBytes: Uint8Array): Promise<CryptoKey> {
  * @returns CryptoKey for AES-GCM
  */
 export async function generateAesKey(): Promise<CryptoKey> {
-  return crypto.subtle.generateKey(
+  return globalThis.crypto.subtle.generateKey(
     { name: 'AES-GCM', length: 256 },
     true, // extractable for wrapping
     ['encrypt', 'decrypt']
@@ -75,7 +75,7 @@ export async function generateAesKey(): Promise<CryptoKey> {
  * @returns 32-byte raw key
  */
 export async function exportAesKey(key: CryptoKey): Promise<Uint8Array> {
-  const exported = await crypto.subtle.exportKey('raw', key);
+  const exported = await globalThis.crypto.subtle.exportKey('raw', key);
   return new Uint8Array(exported);
 }
 
@@ -109,7 +109,7 @@ export async function aesEncrypt(
   }
 
   // Encrypt with AES-GCM (convert Uint8Arrays to ArrayBuffer for Web Crypto compatibility)
-  const encrypted = await crypto.subtle.encrypt(
+  const encrypted = await globalThis.crypto.subtle.encrypt(
     {
       name: 'AES-GCM',
       iv: toArrayBuffer(ivBytes),
@@ -179,7 +179,7 @@ export async function aesDecrypt(
 
   try {
     // Convert Uint8Arrays to ArrayBuffer for Web Crypto compatibility
-    const decrypted = await crypto.subtle.decrypt(
+    const decrypted = await globalThis.crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
         iv: toArrayBuffer(iv),

@@ -86,7 +86,7 @@ async function derivePBKDF2(
   iterations: number,
   hashLength: number
 ): Promise<Uint8Array> {
-  const passwordKey = await crypto.subtle.importKey(
+  const passwordKey = await globalThis.crypto.subtle.importKey(
     'raw',
     textEncoder.encode(password),
     'PBKDF2',
@@ -97,7 +97,7 @@ async function derivePBKDF2(
   const saltBuffer = new ArrayBuffer(salt.length);
   new Uint8Array(saltBuffer).set(salt);
 
-  const bits = await crypto.subtle.deriveBits(
+  const bits = await globalThis.crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
       salt: saltBuffer,
@@ -278,7 +278,7 @@ export async function isArgon2idAvailable(): Promise<boolean> {
  * Check if PBKDF2 is available (always true in Web Crypto environments).
  */
 export function isPBKDF2Available(): boolean {
-  return typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined';
+  return typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.subtle !== 'undefined';
 }
 
 /**

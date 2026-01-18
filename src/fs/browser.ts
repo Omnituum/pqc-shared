@@ -389,7 +389,7 @@ export function isBrowser(): boolean {
  * Check if Web Crypto API is available.
  */
 export function isWebCryptoAvailable(): boolean {
-  return typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined';
+  return typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.subtle !== 'undefined';
 }
 
 /**

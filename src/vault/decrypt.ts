@@ -65,7 +65,7 @@ export async function decryptVault(
     // Create ArrayBuffer for importKey compatibility
     const keyBuffer = new ArrayBuffer(keyBytes.length);
     new Uint8Array(keyBuffer).set(keyBytes);
-    key = await crypto.subtle.importKey(
+    key = await globalThis.crypto.subtle.importKey(
       'raw',
       keyBuffer,
       { name: 'AES-GCM', length: 256 },
@@ -85,7 +85,7 @@ export async function decryptVault(
     new Uint8Array(ciphertextArrayBuffer).set(ciphertext);
 
     // Decrypt with AES-256-GCM
-    const plaintext = await crypto.subtle.decrypt(
+    const plaintext = await globalThis.crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: ivArrayBuffer },
       key,
       ciphertextArrayBuffer

@@ -12,7 +12,7 @@
  * Generate a cryptographically secure random ID.
  */
 export function generateId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -20,7 +20,7 @@ export function generateId(): string {
  * Generate a short random ID (8 characters).
  */
 export function generateShortId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(4));
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 

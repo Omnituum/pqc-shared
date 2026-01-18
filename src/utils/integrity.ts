@@ -49,7 +49,7 @@ function computeStringHash(str: string): string {
  */
 export async function computeHashAsync(data: string): Promise<string> {
   const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
+  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', encoder.encode(data));
   return toHex(new Uint8Array(hashBuffer));
 }
 

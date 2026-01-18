@@ -174,7 +174,7 @@ export function kyberWrapKey(sharedSecret: Uint8Array, msgKey32: Uint8Array): {
   }
 
   const kek = sha256(sharedSecret); // Derive KEK from shared secret
-  const nonce = crypto.getRandomValues(new Uint8Array(24));
+  const nonce = globalThis.crypto.getRandomValues(new Uint8Array(24));
   const wrapped = nacl.secretbox(msgKey32, nonce, kek);
 
   return {
