@@ -11,9 +11,8 @@
  * Used in Noise protocols for key derivation.
  */
 
-import { hkdf, extract, expand } from '@noble/hashes/hkdf';
-import { sha256 } from '@noble/hashes/sha256';
-import { sha512 } from '@noble/hashes/sha512';
+import { hkdf, extract, expand } from '@noble/hashes/hkdf.js';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES

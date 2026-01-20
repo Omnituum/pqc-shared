@@ -5,8 +5,8 @@
  * Uses Web Crypto API and @noble/hashes for all operations.
  */
 
-import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
-import { hmac } from '@noble/hashes/hmac';
+import { sha256 as nobleSha256 } from '@noble/hashes/sha2.js';
+import { hmac } from '@noble/hashes/hmac.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TEXT ENCODING

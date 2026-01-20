@@ -41,7 +41,7 @@ async function loadDilithium(): Promise<any> {
 
   try {
     // @noble/post-quantum provides ml-dsa
-    const { ml_dsa65 } = await import('@noble/post-quantum/ml-dsa');
+    const { ml_dsa65 } = await import('@noble/post-quantum/ml-dsa.js');
     dilithiumModule = ml_dsa65;
     return dilithiumModule;
   } catch (e) {

@@ -9,7 +9,7 @@
  * Used in Noise protocols for transcript hashing.
  */
 
-import { blake3 as nobleBlake3 } from '@noble/hashes/blake3';
+import { blake3 as nobleBlake3 } from '@noble/hashes/blake3.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES

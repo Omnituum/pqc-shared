@@ -8,7 +8,7 @@
  * Used in Noise protocols and general-purpose encryption.
  */
 
-import { chacha20poly1305, xchacha20poly1305 } from '@noble/ciphers/chacha';
+import { chacha20poly1305, xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
