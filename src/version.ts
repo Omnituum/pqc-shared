@@ -9,15 +9,20 @@
  * @see pqc-docs/specs/identity.v1.md
  */
 
+import {
+  OMNI_VERSIONS,
+  DEPRECATED_VERSIONS,
+} from '@omnituum/envelope-registry';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION CONSTANTS (FROZEN)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** HybridEnvelope version - hybrid encryption format */
-export const ENVELOPE_VERSION = 'omnituum.hybrid.v1' as const;
+/** HybridEnvelope version - hybrid encryption format (from registry) */
+export const ENVELOPE_VERSION = OMNI_VERSIONS.HYBRID_V1;
 
-/** Legacy envelope version for backwards compatibility */
-export const ENVELOPE_VERSION_LEGACY = 'pqc-demo.hybrid.v1' as const;
+/** Legacy envelope version for backwards compatibility (from registry) */
+export const ENVELOPE_VERSION_LEGACY = DEPRECATED_VERSIONS.PQC_DEMO_HYBRID_V1;
 
 /** OmnituumVault version - decrypted vault format */
 export const VAULT_VERSION = 'omnituum.vault.v1' as const;
