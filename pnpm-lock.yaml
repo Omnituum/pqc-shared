@@ -17,6 +17,9 @@ importers:
       '@noble/post-quantum':
         specifier: ~0.5.4
         version: 0.5.4
+      '@omnituum/envelope-registry':
+        specifier: file:../envelope-registry
+        version: file:../envelope-registry
       hash-wasm:
         specifier: ^4.11.0
         version: 4.12.0
@@ -226,6 +229,10 @@ packages:
   '@noble/post-quantum@0.5.4':
     resolution: {integrity: sha512-leww0zzIirrvwaYMPI9fj6aRIlA/c6Y0/lifQQ1YOOyHEr0MNH3yYpjXeiVG+tWdPps4XxGclFWX2INPO3Yo5w==}
     engines: {node: '>= 20.19.0'}
+
+  '@omnituum/envelope-registry@file:../envelope-registry':
+    resolution: {directory: ../envelope-registry, type: directory}
+    engines: {node: '>=18'}
 
   '@rollup/rollup-android-arm-eabi@4.55.1':
     resolution: {integrity: sha512-9R0DM/ykwfGIlNu6+2U09ga0WXeZ9MRC2Ter8jnz8415VbuIykVuc6bhdrbORFZANDmTDvq26mJrEVTl8TdnDg==}
@@ -687,6 +694,8 @@ snapshots:
     dependencies:
       '@noble/curves': 2.0.1
       '@noble/hashes': 2.0.1
+
+  '@omnituum/envelope-registry@file:../envelope-registry': {}
 
   '@rollup/rollup-android-arm-eabi@4.55.1':
     optional: true
