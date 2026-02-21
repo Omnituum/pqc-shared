@@ -50,6 +50,7 @@
   "dependencies": {
     "@noble/ciphers": "~2.0.0",
     "@noble/hashes": "~2.0.0",
+    "@omnituum/envelope-registry": "file:../envelope-registry",
     "@noble/post-quantum": "~0.5.4",
     "hash-wasm": "^4.11.0",
     "kyber-crystals": "^1.0.7",

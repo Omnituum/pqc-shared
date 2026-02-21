@@ -75,38 +75,22 @@ export interface HybridSecretKeys {
   kyberSecB64: string;
 }
 
-export interface HybridEnvelope {
-  /** Version identifier (FROZEN - see pqc-docs/specs/envelope.v1.md) */
-  v: typeof ENVELOPE_VERSION;
-  /** Algorithm suite */
-  suite: typeof ENVELOPE_SUITE;
-  /** AEAD algorithm */
-  aead: typeof ENVELOPE_AEAD;
-  /** X25519 ephemeral public key (hex) */
-  x25519Epk: string;
-  /** X25519 wrapped content key */
-  x25519Wrap: {
-    nonce: string;
-    wrapped: string;
-  };
-  /** Kyber KEM ciphertext (base64) */
-  kyberKemCt: string;
-  /** Kyber wrapped content key */
-  kyberWrap: {
-    nonce: string;
-    wrapped: string;
-  };
-  /** Content encryption nonce (base64) */
-  contentNonce: string;
-  /** Encrypted content (base64) */
-  ciphertext: string;
-  /** Metadata */
-  meta: {
-    createdAt: string;
+/**
+ * HybridEnvelope -- OmniHybridV1 from the registry with
+ * app-semantic meta fields (senderName, senderId).
+ * The Omni registry type defines only the crypto-relevant surface.
+ *
+ * Intentionally a type alias (not interface extends) to discourage
+ * further field additions here. New app-semantic fields belong in
+ * product-level types, not in the shared crypto layer.
+ */
+import type { OmniHybridV1 } from '@omnituum/envelope-registry';
+export type HybridEnvelope = Omit<OmniHybridV1, 'meta'> & {
+  meta: OmniHybridV1['meta'] & {
     senderName?: string;
     senderId?: string;
   };
-}
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
