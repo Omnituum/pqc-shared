@@ -18,8 +18,8 @@ importers:
         specifier: ~0.5.4
         version: 0.5.4
       '@omnituum/envelope-registry':
-        specifier: file:../envelope-registry
-        version: file:../envelope-registry
+        specifier: github:Omnituum/envelope-registry#v0.1.2
+        version: https://codeload.github.com/Omnituum/envelope-registry/tar.gz/6b6d7cdeba1c10100822229ea464d8a6c6dd4f96
       hash-wasm:
         specifier: ^4.11.0
         version: 4.12.0
@@ -230,8 +230,9 @@ packages:
     resolution: {integrity: sha512-leww0zzIirrvwaYMPI9fj6aRIlA/c6Y0/lifQQ1YOOyHEr0MNH3yYpjXeiVG+tWdPps4XxGclFWX2INPO3Yo5w==}
     engines: {node: '>= 20.19.0'}
 
-  '@omnituum/envelope-registry@file:../envelope-registry':
-    resolution: {directory: ../envelope-registry, type: directory}
+  '@omnituum/envelope-registry@https://codeload.github.com/Omnituum/envelope-registry/tar.gz/6b6d7cdeba1c10100822229ea464d8a6c6dd4f96':
+    resolution: {tarball: https://codeload.github.com/Omnituum/envelope-registry/tar.gz/6b6d7cdeba1c10100822229ea464d8a6c6dd4f96}
+    version: 0.1.2
     engines: {node: '>=18'}
 
   '@rollup/rollup-android-arm-eabi@4.55.1':
@@ -695,7 +696,7 @@ snapshots:
       '@noble/curves': 2.0.1
       '@noble/hashes': 2.0.1
 
-  '@omnituum/envelope-registry@file:../envelope-registry': {}
+  '@omnituum/envelope-registry@https://codeload.github.com/Omnituum/envelope-registry/tar.gz/6b6d7cdeba1c10100822229ea464d8a6c6dd4f96': {}
 
   '@rollup/rollup-android-arm-eabi@4.55.1':
     optional: true
