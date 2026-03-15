@@ -1,8 +1,10 @@
 /**
  * Safe Dilithium ML-DSA-65 adapter.
  *
- * Object parameters + branded types = argument inversion is impossible.
- * Includes invariant self-test that runs on first use.
+ * Object parameters + branded types + manifest verification.
+ * - Argument inversion is a compile-time error.
+ * - Primitive identity verified on first use (key/sig sizes match manifest).
+ * - Behavioral roundtrip confirmed before any real operation.
  */
 
 import type {
@@ -12,6 +14,7 @@ import type {
   DilithiumSignature,
   Message,
 } from './types'
+import { ML_DSA_65, assertSignaturePrimitive } from './manifests'
 
 let _mod: any = null
 let _invariantChecked = false
@@ -25,23 +28,15 @@ async function load(): Promise<any> {
 }
 
 /**
- * Run once on first use. Verifies that noble's sign/verify argument order
- * matches our wrapper. Throws immediately if the adapter is broken.
+ * Run once on first use. Verifies:
+ * 1. Key and signature sizes match ML-DSA-65 manifest
+ * 2. sign/verify roundtrip produces correct result
+ * Catches both argument order bugs and supply-chain primitive substitution.
  */
 async function checkInvariant(): Promise<void> {
   if (_invariantChecked) return
   const mod = await load()
-
-  const msg = new Uint8Array([0xde, 0xad, 0xbe, 0xef])
-  const kp = mod.keygen()
-  const sig = mod.sign(msg, kp.secretKey)
-
-  if (!mod.verify(sig, msg, kp.publicKey)) {
-    throw new Error(
-      'CRITICAL: Dilithium adapter invariant failure — noble API argument order may have changed',
-    )
-  }
-
+  assertSignaturePrimitive(mod, ML_DSA_65)
   _invariantChecked = true
 }
 
