@@ -57,7 +57,7 @@
   "dependencies": {
     "@noble/ciphers": "~2.0.0",
     "@noble/hashes": "~2.0.0",
-    "@omnituum/envelope-registry": "workspace:*",
+    "@omnituum/envelope-registry": "github:Omnituum/envelope-registry#v0.1.2",
     "@noble/post-quantum": "~0.5.4",
     "hash-wasm": "^4.11.0",
     "kyber-crystals": "^1.0.7",
@@ -91,5 +91,11 @@
   "bugs": {
     "url": "https://github.com/Omnituum/pqc-shared/issues"
   },
-  "homepage": "https://github.com/Omnituum/pqc-shared#readme"
+  "homepage": "https://github.com/Omnituum/pqc-shared#readme",
+  "packageManager": "pnpm@10.32.1",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@omnituum/envelope-registry"
+    ]
+  }
 }
