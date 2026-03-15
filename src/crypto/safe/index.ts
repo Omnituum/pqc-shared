@@ -77,3 +77,21 @@ export type {
   BoxKey,
   BoxNonce,
 } from './adapters'
+
+// Manifests — primitive identity declarations for supply-chain verification
+export {
+  ML_DSA_65,
+  ML_KEM_768,
+  X25519,
+  XSALSA20_POLY1305,
+  assertSignaturePrimitive,
+  assertKemPrimitive,
+  assertDhPrimitive,
+} from './manifests'
+
+export type {
+  SignatureManifest,
+  KemManifest,
+  DhManifest,
+  SecretboxManifest,
+} from './manifests'
