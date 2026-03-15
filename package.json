@@ -1,6 +1,6 @@
 {
   "name": "@omnituum/pqc-shared",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Omnituum PQC Shared Library - Crypto, Vault, File Encryption, and Utilities",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -31,6 +31,11 @@
       "types": "./dist/fs/index.d.ts",
       "import": "./dist/fs/index.js",
       "require": "./dist/fs/index.cjs"
+    },
+    "./safe": {
+      "types": "./dist/crypto/safe/index.d.ts",
+      "import": "./dist/crypto/safe/index.js",
+      "require": "./dist/crypto/safe/index.cjs"
     }
   },
   "files": [
@@ -44,13 +49,15 @@
     "typecheck": "tsc --noEmit",
     "test:golden:generate": "pnpm -s build && tsx tests/golden/generate-vectors.ts",
     "test:golden:verify": "pnpm -s build && tsx tests/golden/verify-vectors.ts",
-    "test:golden": "npm run test:golden:verify",
-    "pretest": "npm run build"
+    "test:golden": "pnpm test:golden:verify",
+    "test": "vitest run tests/",
+    "test:watch": "vitest tests/",
+    "pretest": "pnpm build"
   },
   "dependencies": {
     "@noble/ciphers": "~2.0.0",
     "@noble/hashes": "~2.0.0",
-    "@omnituum/envelope-registry": "github:Omnituum/envelope-registry#v0.1.2",
+    "@omnituum/envelope-registry": "workspace:*",
     "@noble/post-quantum": "~0.5.4",
     "hash-wasm": "^4.11.0",
     "kyber-crystals": "^1.0.7",
@@ -60,7 +67,8 @@
     "@types/node": "^25.0.9",
     "tsup": "^8.5.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.0"
   },
   "keywords": [
     "pqc",
