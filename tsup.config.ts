@@ -7,6 +7,7 @@ export default defineConfig({
     'vault/index': 'src/vault/index.ts',
     'utils/index': 'src/utils/index.ts',
     'fs/index': 'src/fs/index.ts',
+    'crypto/safe/index': 'src/crypto/safe/index.ts',
   },
   format: ['esm', 'cjs'],
   platform: 'neutral',

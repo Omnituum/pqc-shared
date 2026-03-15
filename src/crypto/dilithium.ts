@@ -140,7 +140,8 @@ export async function dilithiumSign(
   const sk = fromB64(secretKeyB64);
   const msg = typeof message === 'string' ? new TextEncoder().encode(message) : message;
 
-  const signature = mod.sign(sk, msg);
+  // noble API: sign(message, secretKey)
+  const signature = mod.sign(msg, sk);
 
   return {
     signature: toB64(signature),
@@ -160,7 +161,8 @@ export async function dilithiumSignRaw(
     throw new Error('Dilithium library not available');
   }
 
-  return mod.sign(secretKey, message);
+  // noble API: sign(message, secretKey)
+  return mod.sign(message, secretKey);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -190,7 +192,8 @@ export async function dilithiumVerify(
   const msg = typeof message === 'string' ? new TextEncoder().encode(message) : message;
 
   try {
-    return mod.verify(pk, msg, sig);
+    // noble API: verify(signature, message, publicKey)
+    return mod.verify(sig, msg, pk);
   } catch {
     return false;
   }
@@ -210,7 +213,8 @@ export async function dilithiumVerifyRaw(
   }
 
   try {
-    return mod.verify(publicKey, message, signature);
+    // noble API: verify(signature, message, publicKey)
+    return mod.verify(signature, message, publicKey);
   } catch {
     return false;
   }
