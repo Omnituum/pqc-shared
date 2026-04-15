@@ -5,7 +5,7 @@ import './runtime/crypto';
  * Omnituum PQC Shared
  *
  * Unified cryptographic and vault utilities for PQC applications.
- * Combines X25519 (classical) + Kyber ML-KEM-768 (post-quantum) encryption.
+ * Combines X25519 (classical) + Kyber ML-KEM-1024 (FIPS 203, post-quantum) encryption.
  *
  * FROZEN CONTRACTS - see pqc-docs/specs/ for format specifications.
  *
@@ -34,7 +34,7 @@ import './runtime/crypto';
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * @stable Hybrid X25519 + Kyber-768 encryption primitives.
+ * @stable Hybrid X25519 + Kyber ML-KEM-1024 (FIPS 203) encryption primitives.
  * The core post-quantum encryption interface.
  */
 export {
@@ -54,25 +54,28 @@ export type {
 } from './crypto/hybrid';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// KYBER (ML-KEM-768) (@stable)
+// KYBER (ML-KEM-1024, FIPS 203) (@stable)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * @stable Kyber ML-KEM-768 post-quantum KEM primitives.
+ * @stable Kyber ML-KEM-1024 (FIPS 203) post-quantum KEM primitives.
  */
 export {
   isKyberAvailable,
   generateKyberKeypair,
+  generateKyberKeypairFromSeed,
   kyberEncapsulate,
   kyberDecapsulate,
   kyberWrapKey,
   kyberUnwrapKey,
+  KYBER_SUITE,
 } from './crypto/kyber';
 
 export type {
   KyberKeypair,
   KyberKeypairB64,
   KyberEncapsulation,
+  KyberSuite,
 } from './crypto/kyber';
 
 // ═══════════════════════════════════════════════════════════════════════════

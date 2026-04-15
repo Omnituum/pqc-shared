@@ -83,11 +83,14 @@ export type {
 export {
   isKyberAvailable,
   generateKyberKeypair,
+  generateKyberKeypairFromSeed,
   kyberEncapsulate,
   kyberDecapsulate,
   kyberWrapKey,
   kyberUnwrapKey,
+  KYBER_SUITE,
 } from './kyber';
+export type { KyberSuite } from './kyber';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DILITHIUM ML-DSA-65 (Post-Quantum Signatures)

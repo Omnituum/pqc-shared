@@ -1,6 +1,6 @@
 {
   "name": "@omnituum/pqc-shared",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Omnituum PQC Shared Library - Crypto, Vault, File Encryption, and Utilities",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -60,7 +60,6 @@
     "@omnituum/envelope-registry": "github:Omnituum/envelope-registry#v0.1.2",
     "@noble/post-quantum": "~0.5.4",
     "hash-wasm": "^4.11.0",
-    "kyber-crystals": "^1.0.7",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
