@@ -1,0 +1,98 @@
+// tests/interop/kyber-draft-vs-fips203.test.ts
+/**
+ * PQC-02 — Kyber draft (kyber-crystals) vs FIPS 203 (noble) interop gate.
+ *
+ * Decides whether @omnituum/pqc-shared can swap blindly to noble ml_kem1024
+ * (PQC-03a) or must adopt dual-suite tagging (PQC-03b).
+ *
+ * Round-trips tested:
+ *   1. crystals → crystals → crystals    (baseline sanity)
+ *   2. crystals keypair → noble encapsulate → crystals decapsulate    (cross A)
+ *   3. noble keypair    → crystals encapsulate → noble decapsulate    (cross B)
+ *   4. noble → noble → noble             (baseline sanity)
+ *
+ * Each leg compares the encapsulated and decapsulated 32-byte shared secrets.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { ml_kem1024 } from '@noble/post-quantum/ml-kem.js';
+
+async function loadCrystals(): Promise<any> {
+  const m: any = await import('kyber-crystals');
+  const k = m?.default ?? m;
+  const mod = k?.kyber ?? k;
+  if (mod?.ready?.then) await mod.ready;
+  return mod;
+}
+
+function eq(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+describe('PQC-02 Kyber draft vs FIPS 203 interop', () => {
+  it('baseline: crystals encapsulate → crystals decapsulate', async () => {
+    const c = await loadCrystals();
+    const kp = await c.keyPair();
+    const enc: any = await c.encrypt(kp.publicKey);
+    const ct = new Uint8Array(enc.cyphertext ?? enc.ciphertext);
+    const ss1 = new Uint8Array(enc.secret ?? enc.key ?? enc.sharedSecret);
+    const ss2 = new Uint8Array(await c.decrypt(ct, kp.privateKey));
+    expect(eq(ss1, ss2)).toBe(true);
+  });
+
+  it('baseline: noble encapsulate → noble decapsulate', () => {
+    const seed = new Uint8Array(64).fill(3);
+    const kp = ml_kem1024.keygen(seed);
+    const enc = ml_kem1024.encapsulate(kp.publicKey);
+    const ss2 = ml_kem1024.decapsulate(enc.cipherText, kp.secretKey);
+    expect(eq(enc.sharedSecret, ss2)).toBe(true);
+  });
+
+  it('cross A: crystals keypair, noble encapsulate, crystals decapsulate', async () => {
+    const c = await loadCrystals();
+    const kp = await c.keyPair();
+    const pub = new Uint8Array(kp.publicKey);
+    const enc = ml_kem1024.encapsulate(pub);
+    const ss_noble = enc.sharedSecret;
+    let ss_crystals: Uint8Array;
+    try {
+      const r: any = await c.decrypt(enc.cipherText, kp.privateKey);
+      ss_crystals = new Uint8Array(r);
+    } catch (e) {
+      console.log('CROSS-A: crystals.decrypt threw:', (e as Error).message);
+      ss_crystals = new Uint8Array(0);
+    }
+    const match = eq(ss_noble, ss_crystals);
+    console.log('CROSS-A interop:', match ? 'MATCH' : 'MISMATCH');
+    expect(match).toBe(true);
+  });
+
+  it('cross B: noble keypair, crystals encapsulate, noble decapsulate', async () => {
+    const c = await loadCrystals();
+    const seed = new Uint8Array(64).fill(9);
+    const kp = ml_kem1024.keygen(seed);
+    let ss_crystals: Uint8Array;
+    let ct: Uint8Array;
+    try {
+      const enc: any = await c.encrypt(kp.publicKey);
+      ct = new Uint8Array(enc.cyphertext ?? enc.ciphertext);
+      ss_crystals = new Uint8Array(enc.secret ?? enc.key ?? enc.sharedSecret);
+    } catch (e) {
+      console.log('CROSS-B: crystals.encrypt threw:', (e as Error).message);
+      expect(false).toBe(true);
+      return;
+    }
+    let ss_noble: Uint8Array;
+    try {
+      ss_noble = ml_kem1024.decapsulate(ct, kp.secretKey);
+    } catch (e) {
+      console.log('CROSS-B: noble.decapsulate threw:', (e as Error).message);
+      ss_noble = new Uint8Array(0);
+    }
+    const match = eq(ss_crystals, ss_noble);
+    console.log('CROSS-B interop:', match ? 'MATCH' : 'MISMATCH');
+    expect(match).toBe(true);
+  });
+});
