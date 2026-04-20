@@ -1,8 +1,30 @@
-# @omnituum/pqc-shared — Gaps & Tasks
+# @omnituum/pqc-shared — Gaps and Tasks
 
-**Last updated:** 2026-04-15 (revised after legacy-preservation requirement dropped)
+**Date:** 2026-04-20 (updated — migrated to GAPS_AND_TASKS Schema v1.0 per DOC_STANDARD; sweep batch 4a-core, 1 / 3. PQC prefix registered in DOC_STANDARD v0.5.1. Prior: 2026-04-15 revised after legacy-preservation requirement dropped.)
+**Module:** pqc-shared
+**Status:** active
 **Owner:** pqc-shared maintainers
-**Downstream blocker:** `@loggiecid/core` CM-01 (Kyber mnemonic recovery) is fail-closed pending PQC-03 / PQC-04.
+**Prefix:** **PQC-##** (registered in DOC_STANDARD v0.5.1 as the canonical shared PQC-primitive layer — downstream modules point at PQC rather than re-tracking shared crypto concerns locally)
+**Downstream blocker:** `@loggiecid/core` **CM-01** (Kyber mnemonic recovery) is fail-closed pending PQC-03 / PQC-04.
+**Disposition:** 5 PQC-## items. PQC-02 DONE (interop test, historical evidence). PQC-01 / PQC-03 / PQC-04 / PQC-05 open; PQC-03 + PQC-04 coordinated release in `pqc-shared@0.4.0`.
+
+---
+
+## Status Summary
+
+- **Tracked:** 5
+- **Complete:** 1
+- **Open:** 4
+
+---
+
+## Gaps
+
+- [ ] **PQC-01** — Algorithm name reconciliation (rename `ML-KEM-768` labels to `ML-KEM-1024(-FIPS203)` across source, docs, threat-model, exports contract + SDK re-export sites; no wire-format or code-behavior change)
+- [x] **PQC-02** — Cross-library interop test (INTEROP=FAIL recorded 2026-04-15; kept as historical evidence that PQC-03 is a clean cut, not a silent swap)
+- [ ] **PQC-03** — Clean cut to noble `ml_kem1024` (remove `kyber-crystals`; rewire `generateKyberKeypair` / `kyberEncapsulate` / `kyberDecapsulate` to `@noble/post-quantum ml_kem1024`; bump 0.3.2 → 0.4.0; coordinated with PQC-04)
+- [ ] **PQC-04** — Deterministic seed-keygen export (`generateKyberKeypairFromSeed(seed: Uint8Array): KyberKeypair` backed by `ml_kem1024.keygen(seed)`; unblocks core **CM-01** fail-closed branch; ships with PQC-03 in 0.4.0)
+- [ ] **PQC-05** — Post-merge monorepo audit (sweep every `package.json` for `kyber-crystals`; confirm zero non-historical hits after PQC-03 + PQC-04 ship and downstream consumers bump)
 
 ---
 
