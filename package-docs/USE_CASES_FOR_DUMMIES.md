@@ -1,5 +1,7 @@
 # @omnituum/pqc-shared — Use Cases (Plain Language)
 
+**Date:** 2026-04-23 (added 2026-04-24 under DO-24 — DO-27 scaffold oversight; file authored 2026-04-23 without Date header)
+
 ## What is this?
 
 A library that lets your app encrypt, sign, and store data in a way that resists attacks from future quantum computers. It combines today's proven math (X25519, ChaCha20-Poly1305) with tomorrow's quantum-resistant math (ML-KEM-768) so you're safe against both current adversaries and "harvest now, decrypt later" attacks.
