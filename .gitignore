@@ -1,34 +1,90 @@
-# Dependencies
-node_modules/
+# ═══════════════════════════════════════════════════════════════════
+# GITIGNORE_BASELINE per governance/standards/package-docs/reference/
+# Blocks: always node
+# Synced via build/GITIGNORE_BASELINE_SWEEP.sh (DO-31)
+# ═══════════════════════════════════════════════════════════════════
 
-# Build output
-dist/
-*.tsbuildinfo
+# ── OS files ──
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
 
-# Local data
-data/
-*.db
-*.db-shm
-*.db-wal
-
-# Environment
-.env
-.env.*
-.env.local
-
-# IDE / Editor
-.claude/
+# ── Editor / IDE ──
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
 
-# OS files
-.DS_Store
-Thumbs.db
+# ── Secrets (NEVER commit) ──
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+secrets.json
+.secrets/
 
-# Logs
+# ── Local developer overrides ──
+.claude/settings.local.json
+*.local.json
+
+# ── Dependencies ──
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# ── Build outputs ──
+dist/
+build/
+out/
+lib/
+*.tsbuildinfo
+.tsbuildinfo
+next-env.d.ts
+.next/
+
+# ── Test / coverage ──
+coverage/
+.nyc_output/
+*.lcov
+
+# ── Monorepo + build caches ──
+.turbo/
+.cache/
+.parcel-cache/
+
+# ── Pack artifacts ──
+*.tgz
+.packs/
+
+# ═══════════════════════════════════════════════════════════════════
+# Repo-specific additions (preserved from prior .gitignore)
+# ═══════════════════════════════════════════════════════════════════
+
+.claude/
+data/
+*.db
+*.db-shm
+*.db-wal
+.env.local
 *.log
 npm-debug.log*
 pnpm-debug.log*
