@@ -79,6 +79,16 @@ coverage/
 # Repo-specific additions (preserved from prior .gitignore)
 # ═══════════════════════════════════════════════════════════════════
 
+# ── Proprietary docs containment ──
+# package-docs/ contains canonical-4 + custom-gpt material that is treated
+# as proprietary for this public repo. Already-tracked entries are removed
+# from the index in the same commit that adds this rule. Structural
+# deviation from DOC_STANDARD § Module Locations / § Custom GPT Pattern is
+# acknowledged and to be filed against a dedicated DO-## via the Docs
+# Organizer Spec GPT (canonical-4 stub-or-references migration + history
+# review remain follow-ups outside this commit).
+package-docs/
+
 .claude/
 data/
 *.db
