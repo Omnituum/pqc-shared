@@ -45,6 +45,26 @@ export interface KyberEncapsulation {
 export const KYBER_SUITE = 'ML-KEM-1024-FIPS203' as const;
 export type KyberSuite = typeof KYBER_SUITE;
 
+// ─── Wire-format size constants (ML-KEM-1024, FIPS 203) ──────────────────────
+// Exported so consumers can validate inputs and allocate buffers without
+// restating magic literals. Tracked under PQC-08; mirrors the precedent
+// established by DILITHIUM_PUBLIC_KEY_SIZE et al. in `./dilithium`.
+
+/** ML-KEM-1024 public key size (bytes). */
+export const KYBER_PUBLIC_KEY_SIZE = 1568;
+
+/** ML-KEM-1024 secret key size (bytes). */
+export const KYBER_SECRET_KEY_SIZE = 3168;
+
+/** ML-KEM-1024 ciphertext size (bytes). */
+export const KYBER_CIPHERTEXT_SIZE = 1568;
+
+/** ML-KEM-1024 shared-secret size (bytes). */
+export const KYBER_SHARED_SECRET_SIZE = 32;
+
+/** Seed size accepted by `generateKyberKeypairFromSeed` (bytes). */
+export const KYBER_SEED_SIZE = 64;
+
 // ═══════════════════════════════════════════════════════════════════════════
 // AVAILABILITY
 // ═══════════════════════════════════════════════════════════════════════════

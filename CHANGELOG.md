@@ -1,5 +1,45 @@
 # Changelog — @omnituum/pqc-shared
 
+## 0.4.1 (2026-05-06) — Additive: ML-KEM-1024 size constants exported (PQC-08)
+
+### Added
+
+- `KYBER_PUBLIC_KEY_SIZE` (1568) — ML-KEM-1024 public key size in bytes.
+- `KYBER_SECRET_KEY_SIZE` (3168) — ML-KEM-1024 secret key size in bytes.
+- `KYBER_CIPHERTEXT_SIZE` (1568) — ML-KEM-1024 ciphertext size in bytes.
+- `KYBER_SHARED_SECRET_SIZE` (32) — ML-KEM-1024 shared-secret size in bytes.
+- `KYBER_SEED_SIZE` (64) — seed size accepted by `generateKyberKeypairFromSeed`.
+
+These named constants centralize the suite identity at one declaration site so
+consumers can validate buffer lengths and allocate without restating magic
+literals (`1568` / `3168` / `32` / `64`). Mirrors the precedent set by
+`DILITHIUM_PUBLIC_KEY_SIZE` etc. in `./crypto/dilithium`.
+
+### Migration (consumer-side, optional but recommended)
+
+Replace hardcoded ML-KEM byte-size literals in consumer code with the imported
+constants. Known sites tracked under PQC-08 acceptance:
+
+- `sdk/loggie-sdk/packages/core/src/crypto/integrity/verify.ts:220-222`
+- `sdk/loggie-sdk/packages/core/src/crypto/integrity/verify.browser.ts:214-216`
+- `sdk/loggie-sdk/packages/core/src/__tests__/cm-01-mnemonic-recovery-e2e.test.ts:72-73`
+- `sdk/loggie-sdk/packages/core/src/crypto/pqc/__tests__/kyber-determinism.test.ts:37-38`
+
+Plus any other `\b(1568|3168)\b` literals surfaced by a workspace-wide grep.
+
+### Coordination
+
+Pairs naturally with PQC-06 (consumer version-pin sweep). Consumers bumping
+from `0.3.0` → `^0.4.1` pick up both the FIPS 203 backend (from 0.4.0) and
+the size-constant exports in a single bump.
+
+### Internal
+
+- No runtime / wire-format / export-signature changes vs `0.4.0`. Strictly
+  additive minor.
+
+---
+
 ## 0.4.0 (2026-04-15) — BREAKING: Kyber backend swap, naming reconciliation, deterministic seed keygen
 
 ### BREAKING — Kyber backend swap (PQC-03)

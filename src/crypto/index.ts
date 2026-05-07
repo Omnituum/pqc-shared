@@ -89,6 +89,11 @@ export {
   kyberWrapKey,
   kyberUnwrapKey,
   KYBER_SUITE,
+  KYBER_PUBLIC_KEY_SIZE,
+  KYBER_SECRET_KEY_SIZE,
+  KYBER_CIPHERTEXT_SIZE,
+  KYBER_SHARED_SECRET_SIZE,
+  KYBER_SEED_SIZE,
 } from './kyber';
 export type { KyberSuite } from './kyber';
 
