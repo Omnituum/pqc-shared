@@ -18,8 +18,17 @@ import {
 // VERSION CONSTANTS (FROZEN)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** HybridEnvelope version - hybrid encryption format (from registry) */
+/** HybridEnvelope v1 - independent X25519/Kyber wraps (read-only legacy; see v2) */
 export const ENVELOPE_VERSION = OMNI_VERSIONS.HYBRID_V1;
+
+/**
+ * HybridEnvelope v2 - AND-combined KEK (single wrap under
+ * HKDF(ss_mlkem || ss_x25519) with transcript binding). The version new
+ * envelopes are written in. Literal is registered in envelope-registry
+ * 0.2.0 as OMNI_VERSIONS.HYBRID_V2 — switch this to the registry import
+ * once the dependency pin moves past the v0.1.2 tag.
+ */
+export const ENVELOPE_VERSION_V2 = 'omnituum.hybrid.v2' as const;
 
 /** Legacy envelope version for backwards compatibility (from registry) */
 export const ENVELOPE_VERSION_LEGACY = DEPRECATED_VERSIONS.PQC_DEMO_HYBRID_V1;
@@ -33,8 +42,11 @@ export const VAULT_ENCRYPTED_VERSION = 'omnituum.vault.enc.v1' as const;
 /** EncryptedVaultFile v2 - encrypted vault format (Argon2id) */
 export const VAULT_ENCRYPTED_VERSION_V2 = 'omnituum.vault.enc.v2' as const;
 
-/** Algorithm suite for hybrid encryption */
+/** Algorithm suite for hybrid encryption (v1 label — kept for wire compat) */
 export const ENVELOPE_SUITE = 'x25519+kyber768' as const;
+
+/** Algorithm suite for hybrid v2 (matches the actual ML-KEM-1024 backend) */
+export const ENVELOPE_SUITE_V2 = 'x25519+mlkem1024' as const;
 
 /** AEAD algorithm for envelope content */
 export const ENVELOPE_AEAD = 'xsalsa20poly1305' as const;
@@ -55,6 +67,7 @@ export const VAULT_ALGORITHM = 'AES-256-GCM' as const;
 /** Envelope versions we can read */
 export const SUPPORTED_ENVELOPE_VERSIONS = [
   ENVELOPE_VERSION,
+  ENVELOPE_VERSION_V2,
   ENVELOPE_VERSION_LEGACY,
 ] as const;
 

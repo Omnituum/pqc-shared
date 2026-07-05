@@ -51,6 +51,8 @@ export type {
   HybridPublicKeys,
   HybridSecretKeys,
   HybridEnvelope,
+  HybridEnvelopeV1,
+  HybridEnvelopeV2,
 } from './crypto/hybrid';
 
 // ═══════════════════════════════════════════════════════════════════════════

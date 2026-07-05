@@ -3,10 +3,16 @@
  *
  * Post-quantum secure hybrid encryption combining:
  * - X25519 ECDH (classical, proven security)
- * - Kyber ML-KEM-768 (post-quantum, NIST Level 3)
+ * - ML-KEM-1024 (post-quantum, FIPS 203, NIST Level 5)
  *
- * Both key exchanges must succeed for decryption, providing
- * security against both classical and quantum attacks.
+ * v2 (current write format): the content key is wrapped once, under a KEK
+ * derived from BOTH shared secrets (HKDF(ss_mlkem || ss_x25519) with
+ * transcript binding) — both key exchanges must succeed to decrypt, so
+ * breaking either primitive alone is insufficient.
+ *
+ * v1 (read-only legacy): wrapped the key independently under each
+ * primitive; either secret alone sufficed. Kept only for decrypting
+ * existing envelopes — see the 2026-07-05 security audit.
  */
 
 import nacl from 'tweetnacl';
@@ -30,8 +36,8 @@ import {
   isKyberAvailable,
 } from './kyber';
 import {
-  ENVELOPE_VERSION,
-  ENVELOPE_SUITE,
+  ENVELOPE_VERSION_V2,
+  ENVELOPE_SUITE_V2,
   ENVELOPE_AEAD,
   assertEnvelopeVersion,
 } from '../version';
@@ -76,21 +82,52 @@ export interface HybridSecretKeys {
 }
 
 /**
- * HybridEnvelope -- OmniHybridV1 from the registry with
+ * HybridEnvelopeV1 -- OmniHybridV1 from the registry with
  * app-semantic meta fields (senderName, senderId).
  * The Omni registry type defines only the crypto-relevant surface.
  *
  * Intentionally a type alias (not interface extends) to discourage
  * further field additions here. New app-semantic fields belong in
  * product-level types, not in the shared crypto layer.
+ *
+ * READ-ONLY LEGACY: v1 wraps the content key independently under X25519
+ * and Kyber, so either secret alone unwraps it — min(X25519, ML-KEM)
+ * security. hybridEncrypt no longer produces this shape; hybridDecrypt
+ * still reads it.
  */
 import type { OmniHybridV1 } from '@omnituum/envelope-registry';
-export type HybridEnvelope = Omit<OmniHybridV1, 'meta'> & {
+export type HybridEnvelopeV1 = Omit<OmniHybridV1, 'meta'> & {
   meta: OmniHybridV1['meta'] & {
     senderName?: string;
     senderId?: string;
   };
 };
+
+/**
+ * HybridEnvelopeV2 -- single wrap of the content key under an AND-combined
+ * KEK: HKDF-SHA256(ss_mlkem || ss_x25519) with the envelope's own KEM values
+ * bound into the info string. Both primitives must be broken to unwrap.
+ *
+ * Mirrors OmniHybridV2 in envelope-registry 0.2.0 — switch the crypto-surface
+ * fields to the registry import once the dependency pin moves past v0.1.2.
+ */
+export interface HybridEnvelopeV2 {
+  v: typeof ENVELOPE_VERSION_V2;
+  suite: typeof ENVELOPE_SUITE_V2;
+  aead: typeof ENVELOPE_AEAD;
+  /** X25519 ephemeral public key (hex) */
+  x25519Epk: string;
+  /** ML-KEM-1024 KEM ciphertext (base64) */
+  kyberKemCt: string;
+  /** Single wrap of the content key under the combined KEK */
+  ckWrap: { nonce: string; wrapped: string };
+  contentNonce: string;
+  ciphertext: string;
+  meta: { createdAt: string; senderName?: string; senderId?: string };
+}
+
+/** Any hybrid envelope this module can decrypt. */
+export type HybridEnvelope = HybridEnvelopeV1 | HybridEnvelopeV2;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -184,7 +221,34 @@ export function getSecretKeys(identity: HybridIdentity): HybridSecretKeys {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Encrypt a message using hybrid X25519 + Kyber encryption.
+ * Derive the v2 AND-combined KEK. Requires BOTH shared secrets; the
+ * envelope's own KEM values are bound into the info string so a spliced
+ * epk/kemCt from another envelope derives a different KEK and the wrap
+ * fails authentication (X-Wing-style transcript binding).
+ */
+function combinedKekV2(
+  kyberShared: Uint8Array,
+  x25519Shared: Uint8Array,
+  x25519EpkHex: string,
+  kyberKemCtB64: string
+): Uint8Array {
+  const ikm = new Uint8Array(kyberShared.length + x25519Shared.length);
+  ikm.set(kyberShared, 0);
+  ikm.set(x25519Shared, kyberShared.length);
+  try {
+    return hkdfFlex(ikm, 'omnituum/hybrid-v2', `wrap-ck|${x25519EpkHex}|${kyberKemCtB64}`);
+  } finally {
+    ikm.fill(0);
+  }
+}
+
+/**
+ * Encrypt a message using hybrid X25519 + ML-KEM-1024 encryption (v2).
+ *
+ * The content key is wrapped exactly once, under a KEK derived from both
+ * shared secrets together — breaking either primitive alone is insufficient
+ * to unwrap. (v1 wrapped the key independently under each primitive, which
+ * reduced security to min(X25519, ML-KEM); v1 is now read-only legacy.)
  *
  * @param plaintext - Message to encrypt (string or bytes)
  * @param recipientPublicKeys - Recipient's public keys
@@ -194,64 +258,145 @@ export async function hybridEncrypt(
   plaintext: string | Uint8Array,
   recipientPublicKeys: HybridPublicKeys,
   sender?: { name?: string; id?: string }
-): Promise<HybridEnvelope> {
+): Promise<HybridEnvelopeV2> {
   const pt = typeof plaintext === 'string' ? textEncoder.encode(plaintext) : plaintext;
 
   // 1. Generate random content key (32 bytes)
   const CK = rand32();
 
-  // 2. Encrypt content with content key
-  const contentNonce = rand24();
-  const ciphertext = nacl.secretbox(pt, contentNonce, CK);
+  try {
+    // 2. Encrypt content with content key
+    const contentNonce = rand24();
+    const ciphertext = nacl.secretbox(pt, contentNonce, CK);
 
-  // 3. Wrap content key with X25519 ECDH
-  const x25519EphKp = nacl.box.keyPair();
-  const recipientX25519Pk = fromHex(recipientPublicKeys.x25519PubHex);
+    // 3. X25519 ECDH shared secret (ephemeral)
+    const x25519EphKp = nacl.box.keyPair();
+    const recipientX25519Pk = fromHex(recipientPublicKeys.x25519PubHex);
+    const x25519Shared = nacl.scalarMult(x25519EphKp.secretKey, recipientX25519Pk);
+    const x25519EpkHex = toHex(x25519EphKp.publicKey);
 
-  const x25519Shared = nacl.scalarMult(x25519EphKp.secretKey, recipientX25519Pk);
-  const x25519Kek = hkdfFlex(x25519Shared, 'omnituum/x25519', 'wrap-ck');
-  const x25519WrapNonce = rand24();
-  const x25519Wrapped = nacl.secretbox(CK, x25519WrapNonce, x25519Kek);
+    // 4. ML-KEM-1024 shared secret
+    const kyberResult = await kyberEncapsulate(recipientPublicKeys.kyberPubB64);
+    const kyberKemCtB64 = b64(kyberResult.ciphertext);
 
-  // 4. Wrap content key with Kyber KEM
-  const kyberResult = await kyberEncapsulate(recipientPublicKeys.kyberPubB64);
-  const kyberKek = hkdfFlex(kyberResult.sharedSecret, 'omnituum/kyber', 'wrap-ck');
-  const kyberWrapNonce = rand24();
-  const kyberWrapped = nacl.secretbox(CK, kyberWrapNonce, kyberKek);
+    // 5. Single wrap under the AND-combined KEK
+    const kek = combinedKekV2(kyberResult.sharedSecret, x25519Shared, x25519EpkHex, kyberKemCtB64);
+    const ckWrapNonce = rand24();
+    const ckWrapped = nacl.secretbox(CK, ckWrapNonce, kek);
+    kek.fill(0);
+    x25519Shared.fill(0);
+    kyberResult.sharedSecret.fill(0);
+    x25519EphKp.secretKey.fill(0);
 
-  return {
-    v: ENVELOPE_VERSION,
-    suite: ENVELOPE_SUITE,
-    aead: ENVELOPE_AEAD,
-    x25519Epk: toHex(x25519EphKp.publicKey),
-    x25519Wrap: {
-      nonce: b64(x25519WrapNonce),
-      wrapped: b64(x25519Wrapped),
-    },
-    kyberKemCt: b64(kyberResult.ciphertext),
-    kyberWrap: {
-      nonce: b64(kyberWrapNonce),
-      wrapped: b64(kyberWrapped),
-    },
-    contentNonce: b64(contentNonce),
-    ciphertext: b64(ciphertext),
-    meta: {
-      createdAt: new Date().toISOString(),
-      senderName: sender?.name,
-      senderId: sender?.id,
-    },
-  };
+    return {
+      v: ENVELOPE_VERSION_V2,
+      suite: ENVELOPE_SUITE_V2,
+      aead: ENVELOPE_AEAD,
+      x25519Epk: x25519EpkHex,
+      kyberKemCt: kyberKemCtB64,
+      ckWrap: {
+        nonce: b64(ckWrapNonce),
+        wrapped: b64(ckWrapped),
+      },
+      contentNonce: b64(contentNonce),
+      ciphertext: b64(ciphertext),
+      meta: {
+        createdAt: new Date().toISOString(),
+        senderName: sender?.name,
+        senderId: sender?.id,
+      },
+    };
+  } finally {
+    CK.fill(0);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DECRYPTION
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** Unwrap the content key from a v2 envelope — requires BOTH secrets. */
+async function unwrapCkV2(
+  envelope: HybridEnvelopeV2,
+  secretKeys: HybridSecretKeys
+): Promise<Uint8Array> {
+  // ML-KEM decapsulation (post-quantum half). Failure here is fatal — there
+  // is deliberately no classical fallback path in v2.
+  const kyberShared = await kyberDecapsulate(envelope.kyberKemCt, secretKeys.kyberSecB64);
+
+  // X25519 ECDH (classical half)
+  const ephPk = fromHex(envelope.x25519Epk);
+  const sk = fromHex(secretKeys.x25519SecHex);
+  const x25519Shared = nacl.scalarMult(sk, ephPk);
+
+  const kek = combinedKekV2(kyberShared, x25519Shared, envelope.x25519Epk, envelope.kyberKemCt);
+  kyberShared.fill(0);
+  x25519Shared.fill(0);
+
+  const CK = nacl.secretbox.open(ub64(envelope.ckWrap.wrapped), ub64(envelope.ckWrap.nonce), kek);
+  kek.fill(0);
+  if (!CK) {
+    throw new Error('Could not unwrap content key — combined-KEK authentication failed');
+  }
+  return CK;
+}
+
 /**
- * Decrypt a hybrid envelope.
+ * Unwrap the content key from a v1 (or pqc-demo) envelope.
  *
- * Tries Kyber first (post-quantum), falls back to X25519 (classical).
- * Both must be valid for the envelope to be considered secure.
+ * LEGACY READ PATH: v1 wrapped the key independently under each primitive,
+ * so either secret alone suffices — this is exactly the defect v2 fixes.
+ * Kept only so envelopes written before v2 remain readable; re-encrypt to
+ * v2 where the post-quantum guarantee matters.
+ */
+async function unwrapCkV1(
+  envelope: HybridEnvelopeV1,
+  secretKeys: HybridSecretKeys,
+  saltPrefix: string
+): Promise<Uint8Array> {
+  let CK: Uint8Array | null = null;
+
+  try {
+    const kyberShared = await kyberDecapsulate(envelope.kyberKemCt, secretKeys.kyberSecB64);
+    const kyberKek = hkdfFlex(kyberShared, `${saltPrefix}/kyber`, 'wrap-ck');
+    CK = nacl.secretbox.open(
+      ub64(envelope.kyberWrap.wrapped),
+      ub64(envelope.kyberWrap.nonce),
+      kyberKek
+    );
+  } catch {
+    // Fall through to the X25519 wrap.
+  }
+
+  if (!CK) {
+    try {
+      const ephPk = fromHex(envelope.x25519Epk);
+      const sk = fromHex(secretKeys.x25519SecHex);
+      const x25519Shared = nacl.scalarMult(sk, ephPk);
+      const x25519Kek = hkdfFlex(x25519Shared, `${saltPrefix}/x25519`, 'wrap-ck');
+      CK = nacl.secretbox.open(
+        ub64(envelope.x25519Wrap.wrapped),
+        ub64(envelope.x25519Wrap.nonce),
+        x25519Kek
+      );
+    } catch {
+      // Handled below.
+    }
+  }
+
+  if (!CK) {
+    throw new Error('Could not unwrap content key with either algorithm');
+  }
+  return CK;
+}
+
+/**
+ * Decrypt a hybrid envelope (v2, v1, or legacy pqc-demo).
+ *
+ * v2: the content key is unwrapped from a single AND-combined KEK — both
+ * ML-KEM and X25519 secrets are required, and any failure is fatal.
+ * v1/legacy: read-only compatibility path (either secret suffices — the
+ * defect v2 exists to fix).
  *
  * @param envelope - Encrypted envelope
  * @param secretKeys - Recipient's secret keys
@@ -265,50 +410,14 @@ export async function hybridDecrypt(
   const version = envelope.v as string;
   assertEnvelopeVersion(version);
 
-  let CK: Uint8Array | null = null;
-
-  // Determine HKDF salt based on envelope version
-  const saltPrefix = version === 'pqc-demo.hybrid.v1' ? 'pqc-demo' : 'omnituum';
-
-  // Try Kyber decapsulation first (post-quantum)
-  try {
-    const kyberShared = await kyberDecapsulate(envelope.kyberKemCt, secretKeys.kyberSecB64);
-    const kyberKek = hkdfFlex(kyberShared, `${saltPrefix}/kyber`, 'wrap-ck');
-    CK = nacl.secretbox.open(
-      ub64(envelope.kyberWrap.wrapped),
-      ub64(envelope.kyberWrap.nonce),
-      kyberKek
-    );
-    if (CK) {
-      console.log('[Hybrid] Decrypted using Kyber (post-quantum)');
-    }
-  } catch (e) {
-    console.warn('[Hybrid] Kyber decapsulation failed:', e);
-  }
-
-  // Try X25519 if Kyber failed
-  if (!CK) {
-    try {
-      const ephPk = fromHex(envelope.x25519Epk);
-      const sk = fromHex(secretKeys.x25519SecHex);
-      const x25519Shared = nacl.scalarMult(sk, ephPk);
-      const x25519Kek = hkdfFlex(x25519Shared, `${saltPrefix}/x25519`, 'wrap-ck');
-      CK = nacl.secretbox.open(
-        ub64(envelope.x25519Wrap.wrapped),
-        ub64(envelope.x25519Wrap.nonce),
-        x25519Kek
-      );
-      if (CK) {
-        console.log('[Hybrid] Decrypted using X25519 (classical)');
-      }
-    } catch (e) {
-      console.warn('[Hybrid] X25519 decryption failed:', e);
-    }
-  }
-
-  if (!CK) {
-    throw new Error('Could not unwrap content key with either algorithm');
-  }
+  const CK =
+    version === ENVELOPE_VERSION_V2
+      ? await unwrapCkV2(envelope as HybridEnvelopeV2, secretKeys)
+      : await unwrapCkV1(
+          envelope as HybridEnvelopeV1,
+          secretKeys,
+          version === 'pqc-demo.hybrid.v1' ? 'pqc-demo' : 'omnituum'
+        );
 
   // Decrypt content
   const pt = nacl.secretbox.open(
@@ -316,6 +425,7 @@ export async function hybridDecrypt(
     ub64(envelope.contentNonce),
     CK
   );
+  CK.fill(0);
 
   if (!pt) {
     throw new Error('Content authentication failed');
