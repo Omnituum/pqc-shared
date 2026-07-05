@@ -57,7 +57,7 @@
   "dependencies": {
     "@noble/ciphers": "~2.0.0",
     "@noble/hashes": "~2.0.0",
-    "@omnituum/envelope-registry": "github:Omnituum/envelope-registry#v0.1.2",
+    "@omnituum/envelope-registry": "github:Omnituum/envelope-registry#v0.2.0",
     "@noble/post-quantum": "~0.5.4",
     "hash-wasm": "^4.11.0",
     "tweetnacl": "^1.0.3"

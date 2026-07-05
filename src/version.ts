@@ -24,11 +24,9 @@ export const ENVELOPE_VERSION = OMNI_VERSIONS.HYBRID_V1;
 /**
  * HybridEnvelope v2 - AND-combined KEK (single wrap under
  * HKDF(ss_mlkem || ss_x25519) with transcript binding). The version new
- * envelopes are written in. Literal is registered in envelope-registry
- * 0.2.0 as OMNI_VERSIONS.HYBRID_V2 — switch this to the registry import
- * once the dependency pin moves past the v0.1.2 tag.
+ * envelopes are written in.
  */
-export const ENVELOPE_VERSION_V2 = 'omnituum.hybrid.v2' as const;
+export const ENVELOPE_VERSION_V2 = OMNI_VERSIONS.HYBRID_V2;
 
 /** Legacy envelope version for backwards compatibility (from registry) */
 export const ENVELOPE_VERSION_LEGACY = DEPRECATED_VERSIONS.PQC_DEMO_HYBRID_V1;
@@ -160,8 +158,16 @@ export function isVaultEncryptedVersionSupported(version: string): boolean {
 // ENVELOPE VALIDATION
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** v1-shaped required fields: independent per-primitive wraps. */
+const ENVELOPE_V1_FIELDS = ['x25519Epk', 'x25519Wrap', 'kyberKemCt', 'kyberWrap', 'contentNonce', 'ciphertext', 'meta'];
+
+/** v2-shaped required fields: single wrap under the AND-combined KEK. */
+const ENVELOPE_V2_FIELDS = ['x25519Epk', 'kyberKemCt', 'ckWrap', 'contentNonce', 'ciphertext', 'meta'];
+
 /**
- * Validate envelope structure and version.
+ * Validate envelope structure and version. Dispatches per-version since v1
+ * and v2 have different wire shapes (independent dual wraps vs. a single
+ * AND-combined wrap) — see hybrid.ts for the security rationale.
  * Returns detailed validation result.
  */
 export function validateEnvelope(envelope: unknown): {
@@ -184,9 +190,13 @@ export function validateEnvelope(envelope: unknown): {
     errors.push(`Unsupported envelope version: ${env.v}`);
   }
 
+  const isV2 = env.v === ENVELOPE_VERSION_V2;
+  const expectedSuite = isV2 ? ENVELOPE_SUITE_V2 : ENVELOPE_SUITE;
+  const requiredFields = isV2 ? ENVELOPE_V2_FIELDS : ENVELOPE_V1_FIELDS;
+
   // Suite check
-  if (env.suite !== ENVELOPE_SUITE) {
-    errors.push(`Invalid suite: expected "${ENVELOPE_SUITE}", got "${env.suite}"`);
+  if (env.suite !== expectedSuite) {
+    errors.push(`Invalid suite: expected "${expectedSuite}", got "${env.suite}"`);
   }
 
   // AEAD check
@@ -195,8 +205,7 @@ export function validateEnvelope(envelope: unknown): {
   }
 
   // Required fields
-  const required = ['x25519Epk', 'x25519Wrap', 'kyberKemCt', 'kyberWrap', 'contentNonce', 'ciphertext', 'meta'];
-  for (const field of required) {
+  for (const field of requiredFields) {
     if (!(field in env)) {
       errors.push(`Missing required field: ${field}`);
     }

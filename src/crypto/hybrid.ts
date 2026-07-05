@@ -104,27 +104,19 @@ export type HybridEnvelopeV1 = Omit<OmniHybridV1, 'meta'> & {
 };
 
 /**
- * HybridEnvelopeV2 -- single wrap of the content key under an AND-combined
- * KEK: HKDF-SHA256(ss_mlkem || ss_x25519) with the envelope's own KEM values
+ * HybridEnvelopeV2 -- OmniHybridV2 from the registry with app-semantic meta
+ * fields (senderName, senderId), same pattern as HybridEnvelopeV1. Single
+ * wrap of the content key under an AND-combined KEK:
+ * HKDF-SHA256(ss_mlkem || ss_x25519) with the envelope's own KEM values
  * bound into the info string. Both primitives must be broken to unwrap.
- *
- * Mirrors OmniHybridV2 in envelope-registry 0.2.0 — switch the crypto-surface
- * fields to the registry import once the dependency pin moves past v0.1.2.
  */
-export interface HybridEnvelopeV2 {
-  v: typeof ENVELOPE_VERSION_V2;
-  suite: typeof ENVELOPE_SUITE_V2;
-  aead: typeof ENVELOPE_AEAD;
-  /** X25519 ephemeral public key (hex) */
-  x25519Epk: string;
-  /** ML-KEM-1024 KEM ciphertext (base64) */
-  kyberKemCt: string;
-  /** Single wrap of the content key under the combined KEK */
-  ckWrap: { nonce: string; wrapped: string };
-  contentNonce: string;
-  ciphertext: string;
-  meta: { createdAt: string; senderName?: string; senderId?: string };
-}
+import type { OmniHybridV2 } from '@omnituum/envelope-registry';
+export type HybridEnvelopeV2 = Omit<OmniHybridV2, 'meta'> & {
+  meta: OmniHybridV2['meta'] & {
+    senderName?: string;
+    senderId?: string;
+  };
+};
 
 /** Any hybrid envelope this module can decrypt. */
 export type HybridEnvelope = HybridEnvelopeV1 | HybridEnvelopeV2;
