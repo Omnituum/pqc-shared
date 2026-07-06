@@ -1,6 +1,6 @@
 {
   "name": "@omnituum/pqc-shared",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Omnituum PQC Shared Library - Crypto, Vault, File Encryption, and Utilities",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -43,6 +43,7 @@
     "src"
   ],
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsup",
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
