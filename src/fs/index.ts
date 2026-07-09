@@ -62,8 +62,11 @@ export {
 export {
   writeOQEHeader,
   parseOQEHeader,
+  oqeHeaderSize,
   serializeHybridKeyMaterial,
   parseHybridKeyMaterial,
+  serializeHybridKeyMaterialV2,
+  parseHybridKeyMaterialV2,
   serializePasswordKeyMaterial,
   parsePasswordKeyMaterial,
   serializeMetadata,
@@ -83,6 +86,7 @@ export {
   encryptFile,
   encryptFileForSelf,
   encryptFileWithPassword,
+  combinedFileKekV2,
 } from './encrypt';
 
 // Main decryption API

@@ -14,18 +14,47 @@
 /** Magic bytes: "OQEF" (Omnituum Quantum Encrypted File) */
 export const OQE_MAGIC = new Uint8Array([0x4f, 0x51, 0x45, 0x46]);
 
-/** Current format version */
-export const OQE_FORMAT_VERSION = 1;
+/**
+ * OQE format versions.
+ *
+ * v1 (LEGACY, read-only): a single AES-GCM IV was reused for both the
+ * metadata section and the content section under the same content key —
+ * catastrophic GCM nonce reuse — and hybrid mode wrapped the content key
+ * independently under X25519 and Kyber (either secret alone unwrapped it).
+ * Kept only so pre-existing files remain decryptable.
+ *
+ * v2 (CURRENT, write format): distinct random IVs per AES-GCM section, the
+ * serialized header bound as AEAD associated data, and hybrid mode wraps the
+ * content key once under an AND-combined KEK (HKDF(ss_mlkem || ss_x25519)
+ * with transcript binding) — both primitives must be broken to unwrap.
+ * See the 2026-07-06 fs security fix.
+ */
+export const OQE_FORMAT_VERSION_V1 = 1;
+export const OQE_FORMAT_VERSION_V2 = 2;
+
+/** Current (write) format version. */
+export const OQE_FORMAT_VERSION = OQE_FORMAT_VERSION_V2;
+
+/** Format versions this library can read. */
+export const SUPPORTED_OQE_VERSIONS = [OQE_FORMAT_VERSION_V1, OQE_FORMAT_VERSION_V2] as const;
 
 /** Supported encryption modes */
 export type OQEMode = 'hybrid' | 'password';
 
 /** Algorithm suite identifiers */
 export const ALGORITHM_SUITES = {
-  /** Hybrid: X25519 ECDH + Kyber768 KEM + AES-256-GCM */
+  /**
+   * LEGACY (read-only): Hybrid X25519 + Kyber with independent per-primitive
+   * wraps (either secret unwraps). Only appears in v1 files. Never written.
+   */
   HYBRID_X25519_KYBER768_AES256GCM: 0x01,
   /** Password: Argon2id + AES-256-GCM */
   PASSWORD_ARGON2ID_AES256GCM: 0x02,
+  /**
+   * Hybrid X25519 + ML-KEM-1024 with a single AND-combined KEK wrap
+   * (HKDF(ss_mlkem || ss_x25519), transcript-bound). Written by v2.
+   */
+  HYBRID_X25519_MLKEM1024_AES256GCM: 0x03,
 } as const;
 
 export type AlgorithmSuiteId = typeof ALGORITHM_SUITES[keyof typeof ALGORITHM_SUITES];
@@ -117,12 +146,29 @@ export interface OQEHeader {
   metadataLength: number;
   /** Length of key material section */
   keyMaterialLength: number;
-  /** AES-GCM initialization vector */
+  /**
+   * AES-GCM IV for the metadata section. In v1 this same IV was (incorrectly)
+   * also used for the content section; v2 uses `contentIv` for content.
+   */
   iv: Uint8Array;
+  /**
+   * AES-GCM IV for the content section (v2 only). Distinct from `iv` so the
+   * two sections never share a (key, nonce) pair. Undefined for v1 files.
+   */
+  contentIv?: Uint8Array;
 }
 
-/** Fixed header size in bytes (before variable-length sections) */
-export const OQE_HEADER_SIZE = 30;
+/** Fixed v1 header size in bytes (before variable-length sections). */
+export const OQE_HEADER_SIZE_V1 = 30;
+
+/** Fixed v2 header size: v1 layout plus a 12-byte content IV. */
+export const OQE_HEADER_SIZE_V2 = 42;
+
+/**
+ * @deprecated Use OQE_HEADER_SIZE_V1 / OQE_HEADER_SIZE_V2. Retained as the v1
+ * size for source compatibility.
+ */
+export const OQE_HEADER_SIZE = OQE_HEADER_SIZE_V1;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // KEY MATERIAL (Mode-Specific)
@@ -150,6 +196,31 @@ export interface HybridKeyMaterial {
   kyberWrappedKey: Uint8Array;
   /** Kyber wrap nonce */
   kyberNonce: Uint8Array;
+}
+
+/**
+ * v2 Hybrid Mode Key Material — single AND-combined wrap.
+ *
+ * The content key is wrapped exactly once under a KEK derived from BOTH shared
+ * secrets: HKDF(ss_mlkem || ss_x25519) with the ephemeral X25519 key and the
+ * Kyber ciphertext bound into the info string. Both the X25519 and ML-KEM
+ * exchanges must succeed to unwrap — there is no per-primitive fallback.
+ *
+ * Serialized layout:
+ * - X25519 ephemeral public key (32 bytes)
+ * - Kyber KEM ciphertext (2-byte length prefix + data)
+ * - Content-key wrap nonce (24 bytes)
+ * - Wrapped content key (2-byte length prefix + data, 48 bytes)
+ */
+export interface HybridKeyMaterialV2 {
+  /** X25519 ephemeral public key */
+  x25519EphemeralPk: Uint8Array;
+  /** Kyber KEM ciphertext */
+  kyberCiphertext: Uint8Array;
+  /** Wrap nonce for the single content-key wrap (NaCl secretbox) */
+  ckWrapNonce: Uint8Array;
+  /** Content key wrapped under the AND-combined KEK */
+  ckWrapped: Uint8Array;
 }
 
 /**

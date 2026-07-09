@@ -1,22 +1,29 @@
 /**
  * Omnituum PQC Shared - Integrity Verification
  *
- * SHA-256 based integrity checking for vault contents.
+ * SHA-256 checksum over a vault's public identity records.
+ *
+ * SCOPE: this is an UNKEYED integrity checksum — it detects accidental
+ * corruption or field mix-ups, not malicious tampering. An attacker who edits
+ * the decrypted vault can simply recompute this value. Tamper *resistance* for
+ * a stored vault comes from the AES-256-GCM authentication tag on the encrypted
+ * file (see vault/encrypt.ts), not from this hash. Do not treat a matching
+ * integrity hash as authentication.
  */
 
 import type { HybridIdentityRecord } from '../vault/types';
-import { toHex } from '../crypto/primitives';
+import { sha256, toHex, textEncoder } from '../crypto/primitives';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INTEGRITY HASH
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Compute SHA-256 integrity hash for a list of identities.
- * Uses only the public keys and metadata to create a deterministic hash.
+ * Compute a SHA-256 checksum for a list of identities.
+ * Uses only the public keys and metadata (never secret keys). Deterministic:
+ * the canonical objects carry a fixed key order, which JSON.stringify preserves.
  */
 export function computeIntegrityHash(identities: HybridIdentityRecord[]): string {
-  // Create a deterministic representation (exclude secret keys from hash input)
   const canonical = identities.map(i => ({
     id: i.id,
     name: i.name,
@@ -26,22 +33,16 @@ export function computeIntegrityHash(identities: HybridIdentityRecord[]): string
     rotationCount: i.rotationCount,
   }));
 
-  const serialized = JSON.stringify(canonical, Object.keys(canonical[0] || {}).sort());
+  const serialized = JSON.stringify(canonical);
   return computeStringHash(serialized);
 }
 
 /**
- * Compute SHA-256 hash of a string (synchronous fallback).
+ * Real SHA-256 of a UTF-8 string, returned as lowercase hex. Synchronous via
+ * @noble/hashes (no Web Crypto async dependency).
  */
 function computeStringHash(str: string): string {
-  // Simple hash for sync operation - actual implementation uses Web Crypto
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16).padStart(16, '0');
+  return toHex(sha256(textEncoder.encode(str)));
 }
 
 /**

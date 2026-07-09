@@ -12,17 +12,18 @@ import {
   rand12,
   toHex,
   fromHex,
+  b64,
   hkdfSha256,
   sha256,
   u8,
 } from '../crypto/primitives';
 import { kyberEncapsulate, isKyberAvailable } from '../crypto/kyber';
 import {
-  OQE_FORMAT_VERSION,
+  OQE_FORMAT_VERSION_V2,
   ALGORITHM_SUITES,
   OQEMetadata,
   OQEHeader,
-  HybridKeyMaterial,
+  HybridKeyMaterialV2,
   PasswordKeyMaterial,
   HybridEncryptOptions,
   PasswordEncryptOptions,
@@ -34,26 +35,55 @@ import {
   DEFAULT_ARGON2ID_PARAMS,
 } from './types';
 import { deriveKeyFromPassword, generateArgon2Salt, isArgon2Available } from './argon2';
-import { aesEncrypt } from './aes';
+import { aesEncrypt, AES_GCM_TAG_SIZE } from './aes';
 import {
-  serializeHybridKeyMaterial,
+  serializeHybridKeyMaterialV2,
   serializePasswordKeyMaterial,
   serializeMetadata,
+  writeOQEHeader,
   assembleOQEFile,
   addOQEExtension,
 } from './format';
+
+// AES-GCM tag length is fixed at 16 bytes, so GCM ciphertext length is known
+// before encryption. This lets us build (and thus AAD-bind) the full header,
+// including metadataLength, prior to the actual encrypt calls.
+const AES_GCM_TAG_LEN = AES_GCM_TAG_SIZE;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function hkdfFlex(ikm: Uint8Array, salt: string, info: string): Uint8Array {
-  return hkdfSha256(ikm, { salt: u8(salt), info: u8(info), length: 32 });
-}
-
 function computeIdentityHash(publicKeyHex: string): string {
   const hash = sha256(fromHex(publicKeyHex));
   return toHex(hash).slice(0, 16); // First 8 bytes = 16 hex chars
+}
+
+/**
+ * Derive the v2 AND-combined KEK for file encryption. Requires BOTH shared
+ * secrets; the envelope's own KEM values are bound into the HKDF info so a
+ * spliced ephemeral key or Kyber ciphertext derives a different KEK and the
+ * wrap fails authentication (X-Wing-style transcript binding). Domain-separated
+ * from the message-envelope KEK via the "omnituum/fs/hybrid-v2" salt.
+ */
+export function combinedFileKekV2(
+  kyberShared: Uint8Array,
+  x25519Shared: Uint8Array,
+  x25519EpkHex: string,
+  kyberKemCtB64: string
+): Uint8Array {
+  const ikm = new Uint8Array(kyberShared.length + x25519Shared.length);
+  ikm.set(kyberShared, 0);
+  ikm.set(x25519Shared, kyberShared.length);
+  try {
+    return hkdfSha256(ikm, {
+      salt: u8('omnituum/fs/hybrid-v2'),
+      info: u8(`wrap-content-key|${x25519EpkHex}|${kyberKemCtB64}`),
+      length: 32,
+    });
+  } finally {
+    ikm.fill(0);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -61,8 +91,13 @@ function computeIdentityHash(publicKeyHex: string): string {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Encrypt a file using hybrid X25519 + Kyber768 encryption.
- * Provides post-quantum security through dual-algorithm key wrapping.
+ * Encrypt a file using hybrid X25519 + ML-KEM-1024 encryption (OQE v2).
+ *
+ * The content key is wrapped exactly once, under a KEK derived from BOTH shared
+ * secrets together (AND-combined) — breaking either primitive alone is
+ * insufficient to unwrap. Metadata and content are encrypted under separate
+ * AES-GCM IVs, and the full serialized header (version, suite, flags, lengths,
+ * both IVs) is bound as AEAD associated data.
  */
 async function encryptHybrid(
   plaintext: Uint8Array,
@@ -77,65 +112,74 @@ async function encryptHybrid(
   // 1. Generate random content key (32 bytes for AES-256)
   const contentKey = rand32();
 
-  // 2. Generate IV for AES-GCM
-  const iv = rand12();
+  try {
+    // 2. Separate IVs for metadata and content — never reuse a (key, nonce) pair.
+    const metadataIv = rand12();
+    const contentIv = rand12();
 
-  // 3. Wrap content key with X25519 ECDH
-  const x25519EphKp = nacl.box.keyPair();
-  const recipientX25519Pk = fromHex(options.recipientPublicKeys.x25519PubHex);
-  const x25519Shared = nacl.scalarMult(x25519EphKp.secretKey, recipientX25519Pk);
-  const x25519Kek = hkdfFlex(x25519Shared, 'omnituum/fs/x25519', 'wrap-content-key');
-  const x25519Nonce = rand24();
-  const x25519WrappedKey = nacl.secretbox(contentKey, x25519Nonce, x25519Kek);
+    // 3. X25519 ECDH shared secret (ephemeral)
+    const x25519EphKp = nacl.box.keyPair();
+    const recipientX25519Pk = fromHex(options.recipientPublicKeys.x25519PubHex);
+    const x25519Shared = nacl.scalarMult(x25519EphKp.secretKey, recipientX25519Pk);
+    const x25519EpkHex = toHex(x25519EphKp.publicKey);
 
-  // 4. Wrap content key with Kyber KEM
-  const kyberResult = await kyberEncapsulate(options.recipientPublicKeys.kyberPubB64);
-  const kyberKek = hkdfFlex(kyberResult.sharedSecret, 'omnituum/fs/kyber', 'wrap-content-key');
-  const kyberNonce = rand24();
-  const kyberWrappedKey = nacl.secretbox(contentKey, kyberNonce, kyberKek);
+    // 4. ML-KEM-1024 shared secret
+    const kyberResult = await kyberEncapsulate(options.recipientPublicKeys.kyberPubB64);
+    const kyberKemCtB64 = b64(kyberResult.ciphertext);
 
-  // 5. Serialize key material
-  const keyMaterial: HybridKeyMaterial = {
-    x25519EphemeralPk: x25519EphKp.publicKey,
-    x25519Nonce,
-    x25519WrappedKey,
-    kyberCiphertext: kyberResult.ciphertext,
-    kyberNonce,
-    kyberWrappedKey,
-  };
-  const keyMaterialBytes = serializeHybridKeyMaterial(keyMaterial);
+    // 5. Single wrap under the AND-combined, transcript-bound KEK.
+    const kek = combinedFileKekV2(kyberResult.sharedSecret, x25519Shared, x25519EpkHex, kyberKemCtB64);
+    const ckWrapNonce = rand24();
+    const ckWrapped = nacl.secretbox(contentKey, ckWrapNonce, kek);
+    kek.fill(0);
+    x25519Shared.fill(0);
+    kyberResult.sharedSecret.fill(0);
+    x25519EphKp.secretKey.fill(0);
 
-  // 6. Encrypt metadata
-  const metadataBytes = serializeMetadata(metadata);
-  const { ciphertext: encryptedMetadata } = await aesEncrypt(metadataBytes, contentKey, iv);
+    // 6. Serialize key material
+    const keyMaterial: HybridKeyMaterialV2 = {
+      x25519EphemeralPk: x25519EphKp.publicKey,
+      kyberCiphertext: kyberResult.ciphertext,
+      ckWrapNonce,
+      ckWrapped,
+    };
+    const keyMaterialBytes = serializeHybridKeyMaterialV2(keyMaterial);
 
-  // 7. Encrypt file content
-  const { ciphertext: encryptedContent } = await aesEncrypt(plaintext, contentKey, iv);
+    // 7. Build header up-front so it can be used as AAD. GCM ciphertext length
+    //    is plaintext length + tag, so metadataLength is known before encrypting.
+    const metadataBytes = serializeMetadata(metadata);
+    const header: OQEHeader = {
+      version: OQE_FORMAT_VERSION_V2,
+      algorithmSuite: ALGORITHM_SUITES.HYBRID_X25519_MLKEM1024_AES256GCM,
+      flags: 0,
+      metadataLength: metadataBytes.length + AES_GCM_TAG_LEN,
+      keyMaterialLength: keyMaterialBytes.length,
+      iv: metadataIv,
+      contentIv,
+    };
+    const aad = writeOQEHeader(header);
 
-  // 8. Build header
-  const header: OQEHeader = {
-    version: OQE_FORMAT_VERSION,
-    algorithmSuite: ALGORITHM_SUITES.HYBRID_X25519_KYBER768_AES256GCM,
-    flags: 0,
-    metadataLength: encryptedMetadata.length,
-    keyMaterialLength: keyMaterialBytes.length,
-    iv,
-  };
+    // 8. Encrypt metadata and content under distinct IVs, header bound as AAD.
+    const { ciphertext: encryptedMetadata } = await aesEncrypt(metadataBytes, contentKey, metadataIv, aad);
+    const { ciphertext: encryptedContent } = await aesEncrypt(plaintext, contentKey, contentIv, aad);
 
-  // 9. Assemble complete file
-  const fileData = assembleOQEFile({
-    header,
-    keyMaterial: keyMaterialBytes,
-    encryptedMetadata,
-    encryptedContent,
-  });
+    // 9. Assemble complete file
+    const fileData = assembleOQEFile({
+      header,
+      keyMaterial: keyMaterialBytes,
+      encryptedMetadata,
+      encryptedContent,
+    });
 
-  return {
-    data: fileData,
-    filename: addOQEExtension(metadata.filename),
-    metadata,
-    mode: 'hybrid',
-  };
+    return {
+      data: fileData,
+      filename: addOQEExtension(metadata.filename),
+      metadata,
+      mode: 'hybrid',
+    };
+  } finally {
+    contentKey.fill(0);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -168,49 +212,54 @@ async function encryptPassword(
   // 2. Derive content key from password
   const contentKey = await deriveKeyFromPassword(options.password, salt, params);
 
-  // 3. Generate IV for AES-GCM
-  const iv = rand12();
+  try {
+    // 3. Separate IVs for metadata and content — never reuse a (key, nonce) pair.
+    const metadataIv = rand12();
+    const contentIv = rand12();
 
-  // 4. Serialize key material (Argon2 params + salt)
-  const keyMaterial: PasswordKeyMaterial = {
-    salt,
-    memoryCost: params.memoryCost,
-    timeCost: params.timeCost,
-    parallelism: params.parallelism,
-  };
-  const keyMaterialBytes = serializePasswordKeyMaterial(keyMaterial);
+    // 4. Serialize key material (Argon2 params + salt)
+    const keyMaterial: PasswordKeyMaterial = {
+      salt,
+      memoryCost: params.memoryCost,
+      timeCost: params.timeCost,
+      parallelism: params.parallelism,
+    };
+    const keyMaterialBytes = serializePasswordKeyMaterial(keyMaterial);
 
-  // 5. Encrypt metadata
-  const metadataBytes = serializeMetadata(metadata);
-  const { ciphertext: encryptedMetadata } = await aesEncrypt(metadataBytes, contentKey, iv);
+    // 5. Build header up-front for AAD binding.
+    const metadataBytes = serializeMetadata(metadata);
+    const header: OQEHeader = {
+      version: OQE_FORMAT_VERSION_V2,
+      algorithmSuite: ALGORITHM_SUITES.PASSWORD_ARGON2ID_AES256GCM,
+      flags: 0,
+      metadataLength: metadataBytes.length + AES_GCM_TAG_LEN,
+      keyMaterialLength: keyMaterialBytes.length,
+      iv: metadataIv,
+      contentIv,
+    };
+    const aad = writeOQEHeader(header);
 
-  // 6. Encrypt file content
-  const { ciphertext: encryptedContent } = await aesEncrypt(plaintext, contentKey, iv);
+    // 6. Encrypt metadata and content under distinct IVs, header bound as AAD.
+    const { ciphertext: encryptedMetadata } = await aesEncrypt(metadataBytes, contentKey, metadataIv, aad);
+    const { ciphertext: encryptedContent } = await aesEncrypt(plaintext, contentKey, contentIv, aad);
 
-  // 7. Build header
-  const header: OQEHeader = {
-    version: OQE_FORMAT_VERSION,
-    algorithmSuite: ALGORITHM_SUITES.PASSWORD_ARGON2ID_AES256GCM,
-    flags: 0,
-    metadataLength: encryptedMetadata.length,
-    keyMaterialLength: keyMaterialBytes.length,
-    iv,
-  };
+    // 7. Assemble complete file
+    const fileData = assembleOQEFile({
+      header,
+      keyMaterial: keyMaterialBytes,
+      encryptedMetadata,
+      encryptedContent,
+    });
 
-  // 8. Assemble complete file
-  const fileData = assembleOQEFile({
-    header,
-    keyMaterial: keyMaterialBytes,
-    encryptedMetadata,
-    encryptedContent,
-  });
-
-  return {
-    data: fileData,
-    filename: addOQEExtension(metadata.filename),
-    metadata,
-    mode: 'password',
-  };
+    return {
+      data: fileData,
+      filename: addOQEExtension(metadata.filename),
+      metadata,
+      mode: 'password',
+    };
+  } finally {
+    contentKey.fill(0);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

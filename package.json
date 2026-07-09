@@ -1,6 +1,6 @@
 {
   "name": "@omnituum/pqc-shared",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Omnituum PQC Shared Library - Crypto, Vault, File Encryption, and Utilities",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -56,12 +56,12 @@
     "pretest": "pnpm build"
   },
   "dependencies": {
-    "@noble/ciphers": "~2.0.0",
-    "@noble/hashes": "~2.0.0",
+    "@noble/ciphers": "2.0.1",
+    "@noble/hashes": "2.0.1",
     "@omnituum/envelope-registry": "github:Omnituum/envelope-registry#v0.2.0",
-    "@noble/post-quantum": "~0.5.4",
-    "hash-wasm": "^4.11.0",
-    "tweetnacl": "^1.0.3"
+    "@noble/post-quantum": "0.5.4",
+    "hash-wasm": "4.12.0",
+    "tweetnacl": "1.0.3"
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
