@@ -1,5 +1,63 @@
 # Changelog — @omnituum/pqc-shared
 
+## 0.6.0 (2026-07-07) — Security: `.oqe` file format v2 + vault integrity fix
+
+Security remediation of the file-encryption (`fs/`) module following the
+2026-07-06 audit. **Breaking write-format change** (new files are written as
+`.oqe` v2); v1 files remain decryptable (read-only compatibility).
+
+### Fixed (security)
+
+- **AES-GCM nonce reuse (critical).** v1 reused a single IV for both the
+  metadata and content sections under the same content key — catastrophic GCM
+  nonce reuse that leaked plaintext XOR and enabled tag forgery. v2 uses a
+  distinct random IV per section. Regression test asserts `metadataIv !==
+  contentIv` for both hybrid and password modes.
+- **Weak hybrid key wrapping (high).** v1 hybrid mode wrapped the content key
+  independently under X25519 and Kyber, so *either* secret alone decrypted —
+  only `min(X25519, ML-KEM)` security. v2 wraps the content key once under an
+  AND-combined, transcript-bound KEK `HKDF(ss_mlkem || ss_x25519)` (domain
+  `omnituum/fs/hybrid-v2`), matching `crypto/hybrid.ts`. Tests prove neither the
+  classical-only nor the post-quantum-only secret can decrypt.
+- **Header not authenticated (medium).** The serialized OQE header
+  (version/suite/flags/lengths/IVs) is now bound as AES-GCM associated data, so
+  algorithm/version downgrade or any header mutation fails authentication.
+  Tamper tests cover suite, flags, and content-IV mutation.
+- **Fake vault integrity hash (high).** `computeIntegrityHash` used a
+  non-cryptographic DJB2 rolling hash while claiming SHA-256. Replaced with real
+  SHA-256 (`@noble/hashes`, synchronous). Documented as an *unkeyed* checksum:
+  tamper resistance for stored vaults comes from AES-256-GCM, not this value.
+- **Crypto-path logging removed.** Deleted primitive-success logs and raw
+  caught-exception logging from the file decrypt path and the ML-DSA/ML-KEM
+  keygen paths.
+
+### Changed
+
+- New algorithm suite `HYBRID_X25519_MLKEM1024_AES256GCM` (0x03) with an honest
+  ML-KEM-1024 label. Legacy suite `0x01` retained for read-only decryption.
+- Dependencies pinned to exact versions (was `~`/`^` ranges).
+
+### Added
+
+- Root exports `ENVELOPE_VERSION_V2` (`omnituum.hybrid.v2`) and
+  `ENVELOPE_SUITE_V2` (`x25519+mlkem1024`) — previously only the v1
+  constants were exported from the package root.
+
+### Fixed (test infrastructure)
+
+- Golden vector suite updated for the v2 write format. The generator was
+  cherry-picking v1 field names (`x25519Wrap`/`kyberWrap`), silently dropping
+  v2's `ckWrap` and producing an undecryptable envelope vector; the verifier
+  still asserted v1 version/suite. Vectors regenerated: envelope is now v2 and
+  the vault `integrityHash` is real SHA-256 (was the pre-0.6.0 DJB2 value).
+  35/35 golden assertions pass.
+
+### Migration
+
+- No API changes. `encryptFile`/`decryptFile` signatures are unchanged.
+- Re-encrypt existing `.oqe` files to gain the v2 guarantees. v1 files still
+  decrypt but retain the either-key weakness and (historically) the reused IV.
+
 ## 0.4.1 (2026-05-06) — Additive: ML-KEM-1024 size constants exported (PQC-08)
 
 ### Added

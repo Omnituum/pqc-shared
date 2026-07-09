@@ -8,16 +8,25 @@
 import { textEncoder, textDecoder } from '../crypto/primitives';
 import {
   OQE_MAGIC,
-  OQE_FORMAT_VERSION,
-  OQE_HEADER_SIZE,
+  OQE_FORMAT_VERSION_V1,
+  OQE_FORMAT_VERSION_V2,
+  OQE_HEADER_SIZE_V1,
+  OQE_HEADER_SIZE_V2,
+  SUPPORTED_OQE_VERSIONS,
   ALGORITHM_SUITES,
   AlgorithmSuiteId,
   OQEHeader,
   OQEMetadata,
   HybridKeyMaterial,
+  HybridKeyMaterialV2,
   PasswordKeyMaterial,
   OQEError,
 } from './types';
+
+/** Byte length of a section's fixed header for the given format version. */
+export function oqeHeaderSize(version: number): number {
+  return version === OQE_FORMAT_VERSION_V2 ? OQE_HEADER_SIZE_V2 : OQE_HEADER_SIZE_V1;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BINARY UTILITIES
@@ -48,13 +57,19 @@ function readUint16BE(data: Uint8Array, offset: number): number {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Write an OQE file header.
+ * Write an OQE file header. Layout depends on `header.version`: v2 appends a
+ * second 12-byte IV (the content IV) after the metadata IV.
+ *
+ * The returned bytes are also used verbatim as the AES-GCM associated data for
+ * both sections (v2), so every field here — version, suite, flags, lengths and
+ * both IVs — is authenticated and cannot be tampered with undetected.
  *
  * @param header - Header data
- * @returns 30-byte header buffer
+ * @returns Header buffer (30 bytes for v1, 42 bytes for v2)
  */
 export function writeOQEHeader(header: OQEHeader): Uint8Array {
-  const buffer = new Uint8Array(OQE_HEADER_SIZE);
+  const isV2 = header.version === OQE_FORMAT_VERSION_V2;
+  const buffer = new Uint8Array(oqeHeaderSize(header.version));
   let offset = 0;
 
   // Magic bytes (4 bytes)
@@ -79,23 +94,32 @@ export function writeOQEHeader(header: OQEHeader): Uint8Array {
   buffer.set(writeUint32BE(header.keyMaterialLength), offset);
   offset += 4;
 
-  // IV (12 bytes)
+  // Metadata IV (12 bytes)
   buffer.set(header.iv, offset);
-  // offset += 12;
+  offset += 12;
+
+  // Content IV (12 bytes, v2 only)
+  if (isV2) {
+    if (!header.contentIv || header.contentIv.length !== 12) {
+      throw new OQEError('INVALID_HEADER', 'v2 header requires a 12-byte contentIv');
+    }
+    buffer.set(header.contentIv, offset);
+    // offset += 12;
+  }
 
   return buffer;
 }
 
 /**
- * Parse an OQE file header.
+ * Parse an OQE file header (v1 or v2).
  *
- * @param data - File data (at least 30 bytes)
+ * @param data - File data
  * @returns Parsed header
  * @throws OQEError if header is invalid
  */
 export function parseOQEHeader(data: Uint8Array): OQEHeader {
-  if (data.length < OQE_HEADER_SIZE) {
-    throw new OQEError('INVALID_HEADER', `File too small: need ${OQE_HEADER_SIZE} bytes, got ${data.length}`);
+  if (data.length < OQE_HEADER_SIZE_V1) {
+    throw new OQEError('INVALID_HEADER', `File too small: need at least ${OQE_HEADER_SIZE_V1} bytes, got ${data.length}`);
   }
 
   let offset = 0;
@@ -109,7 +133,7 @@ export function parseOQEHeader(data: Uint8Array): OQEHeader {
 
   // Version
   const version = data[offset++];
-  if (version !== OQE_FORMAT_VERSION) {
+  if (!SUPPORTED_OQE_VERSIONS.includes(version as typeof SUPPORTED_OQE_VERSIONS[number])) {
     throw new OQEError('UNSUPPORTED_VERSION', `Unsupported OQE version: ${version}`);
   }
 
@@ -117,11 +141,18 @@ export function parseOQEHeader(data: Uint8Array): OQEHeader {
   const algorithmSuiteRaw = data[offset++];
   if (
     algorithmSuiteRaw !== ALGORITHM_SUITES.HYBRID_X25519_KYBER768_AES256GCM &&
+    algorithmSuiteRaw !== ALGORITHM_SUITES.HYBRID_X25519_MLKEM1024_AES256GCM &&
     algorithmSuiteRaw !== ALGORITHM_SUITES.PASSWORD_ARGON2ID_AES256GCM
   ) {
     throw new OQEError('UNSUPPORTED_ALGORITHM', `Unsupported algorithm suite: 0x${algorithmSuiteRaw.toString(16)}`);
   }
   const algorithmSuite = algorithmSuiteRaw as AlgorithmSuiteId;
+
+  const isV2 = version === OQE_FORMAT_VERSION_V2;
+  const headerSize = oqeHeaderSize(version);
+  if (data.length < headerSize) {
+    throw new OQEError('INVALID_HEADER', `Truncated v${version} header: need ${headerSize} bytes, got ${data.length}`);
+  }
 
   // Flags
   const flags = readUint32BE(data, offset);
@@ -135,8 +166,12 @@ export function parseOQEHeader(data: Uint8Array): OQEHeader {
   const keyMaterialLength = readUint32BE(data, offset);
   offset += 4;
 
-  // IV
+  // Metadata IV
   const iv = data.slice(offset, offset + 12);
+  offset += 12;
+
+  // Content IV (v2 only)
+  const contentIv = isV2 ? data.slice(offset, offset + 12) : undefined;
 
   return {
     version,
@@ -145,6 +180,7 @@ export function parseOQEHeader(data: Uint8Array): OQEHeader {
     metadataLength,
     keyMaterialLength,
     iv,
+    contentIv,
   };
 }
 
@@ -248,6 +284,62 @@ export function parseHybridKeyMaterial(data: Uint8Array): HybridKeyMaterial {
 }
 
 /**
+ * Serialize v2 hybrid key material (single AND-combined wrap).
+ *
+ * Format:
+ * - X25519 ephemeral PK (32 bytes)
+ * - Kyber ciphertext length (2 bytes) + Kyber ciphertext (variable)
+ * - Content-key wrap nonce (24 bytes)
+ * - Wrapped content key length (2 bytes) + wrapped content key (variable)
+ */
+export function serializeHybridKeyMaterialV2(km: HybridKeyMaterialV2): Uint8Array {
+  const parts: Uint8Array[] = [];
+
+  parts.push(km.x25519EphemeralPk);
+
+  parts.push(writeUint16BE(km.kyberCiphertext.length));
+  parts.push(km.kyberCiphertext);
+
+  parts.push(km.ckWrapNonce);
+
+  parts.push(writeUint16BE(km.ckWrapped.length));
+  parts.push(km.ckWrapped);
+
+  const totalLength = parts.reduce((sum, p) => sum + p.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  return result;
+}
+
+/**
+ * Parse v2 hybrid key material (single AND-combined wrap).
+ */
+export function parseHybridKeyMaterialV2(data: Uint8Array): HybridKeyMaterialV2 {
+  let offset = 0;
+
+  const x25519EphemeralPk = data.slice(offset, offset + 32);
+  offset += 32;
+
+  const kyberCtLen = readUint16BE(data, offset);
+  offset += 2;
+  const kyberCiphertext = data.slice(offset, offset + kyberCtLen);
+  offset += kyberCtLen;
+
+  const ckWrapNonce = data.slice(offset, offset + 24);
+  offset += 24;
+
+  const ckWrappedLen = readUint16BE(data, offset);
+  offset += 2;
+  const ckWrapped = data.slice(offset, offset + ckWrappedLen);
+
+  return { x25519EphemeralPk, kyberCiphertext, ckWrapNonce, ckWrapped };
+}
+
+/**
  * Serialize password mode key material.
  *
  * Format:
@@ -343,7 +435,7 @@ export function assembleOQEFile(components: OQEFileComponents): Uint8Array {
 export function parseOQEFile(data: Uint8Array): OQEFileComponents {
   const header = parseOQEHeader(data);
 
-  let offset = OQE_HEADER_SIZE;
+  let offset = oqeHeaderSize(header.version);
 
   // Key material
   const keyMaterial = data.slice(offset, offset + header.keyMaterialLength);
@@ -415,8 +507,11 @@ export const OQE_MIME_TYPE = 'application/x-omnituum-encrypted';
  * Get a display-friendly algorithm name from suite ID.
  */
 export function getAlgorithmName(suiteId: AlgorithmSuiteId): string {
+  if (suiteId === ALGORITHM_SUITES.HYBRID_X25519_MLKEM1024_AES256GCM) {
+    return 'Hybrid (X25519 + ML-KEM-1024 + AES-256-GCM)';
+  }
   if (suiteId === ALGORITHM_SUITES.HYBRID_X25519_KYBER768_AES256GCM) {
-    return 'Hybrid (X25519 + Kyber768 + AES-256-GCM)';
+    return 'Hybrid legacy (X25519 + Kyber + AES-256-GCM, either-key)';
   }
   if (suiteId === ALGORITHM_SUITES.PASSWORD_ARGON2ID_AES256GCM) {
     return 'Password (Argon2id + AES-256-GCM)';

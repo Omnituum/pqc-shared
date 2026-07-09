@@ -7,13 +7,17 @@
 import nacl from 'tweetnacl';
 import {
   fromHex,
+  toHex,
   hkdfSha256,
   toB64,
+  b64,
   u8,
 } from '../crypto/primitives';
 import { kyberDecapsulate, isKyberAvailable } from '../crypto/kyber';
 import {
   ALGORITHM_SUITES,
+  OQE_FORMAT_VERSION_V2,
+  OQEHeader,
   OQEMetadata,
   HybridDecryptOptions,
   PasswordDecryptOptions,
@@ -23,13 +27,16 @@ import {
   FileInput,
   toUint8Array,
 } from './types';
+import { combinedFileKekV2 } from './encrypt';
 import { deriveKeyFromPassword, isArgon2Available } from './argon2';
 import { aesDecrypt } from './aes';
 import {
   parseOQEFile,
   parseHybridKeyMaterial,
+  parseHybridKeyMaterialV2,
   parsePasswordKeyMaterial,
   parseMetadata,
+  writeOQEHeader,
 } from './format';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -40,69 +47,120 @@ function hkdfFlex(ikm: Uint8Array, salt: string, info: string): Uint8Array {
   return hkdfSha256(ikm, { salt: u8(salt), info: u8(info), length: 32 });
 }
 
+/**
+ * Reconstruct the AEAD associated data for a parsed v2 header. Re-serializing
+ * the parsed header yields the exact bytes bound at encryption time, so any
+ * mutation of version/suite/flags/lengths/IVs makes AES-GCM authentication fail.
+ */
+function headerAad(header: OQEHeader): Uint8Array {
+  return writeOQEHeader(header);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HYBRID MODE DECRYPTION
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Decrypt an OQE file using hybrid X25519 + Kyber768.
- * Tries Kyber first (post-quantum), falls back to X25519 (classical).
+ * Decrypt an OQE hybrid file. Dispatches by suite:
+ * - v2 (ML-KEM-1024, suite 0x03): single AND-combined KEK — both the X25519 and
+ *   ML-KEM secrets are required and there is no per-primitive fallback.
+ * - v1 legacy (Kyber, suite 0x01): read-only compatibility path where either
+ *   secret alone unwraps the content key (the weakness v2 exists to fix).
  */
 async function decryptHybrid(
   encryptedData: Uint8Array,
   options: HybridDecryptOptions
 ): Promise<OQEDecryptResult> {
-  // Parse file structure
-  const { header, keyMaterial, encryptedMetadata, encryptedContent } = parseOQEFile(encryptedData);
+  const parsed = parseOQEFile(encryptedData);
+  const { header } = parsed;
 
-  // Verify algorithm
-  if (header.algorithmSuite !== ALGORITHM_SUITES.HYBRID_X25519_KYBER768_AES256GCM) {
-    throw new OQEError(
-      'UNSUPPORTED_ALGORITHM',
-      'This file was not encrypted with hybrid mode. Use password decryption.'
-    );
+  if (header.algorithmSuite === ALGORITHM_SUITES.HYBRID_X25519_MLKEM1024_AES256GCM) {
+    return decryptHybridV2(parsed, options);
+  }
+  if (header.algorithmSuite === ALGORITHM_SUITES.HYBRID_X25519_KYBER768_AES256GCM) {
+    return decryptHybridV1Legacy(parsed, options);
+  }
+  throw new OQEError(
+    'UNSUPPORTED_ALGORITHM',
+    'This file was not encrypted with hybrid mode. Use password decryption.'
+  );
+}
+
+type ParsedFile = ReturnType<typeof parseOQEFile>;
+
+/** v2 AND-combined hybrid decryption (both secrets required, header AAD-bound). */
+async function decryptHybridV2(
+  parsed: ParsedFile,
+  options: HybridDecryptOptions
+): Promise<OQEDecryptResult> {
+  const { header, keyMaterial, encryptedMetadata, encryptedContent } = parsed;
+  if (header.version !== OQE_FORMAT_VERSION_V2 || !header.contentIv) {
+    throw new OQEError('INVALID_HEADER', 'v2 hybrid file missing content IV');
   }
 
-  // Parse key material
+  const km = parseHybridKeyMaterialV2(keyMaterial);
+  // Must match encryptHybrid's transcript exactly: plain hex, no "0x" prefix.
+  const x25519EpkHex = toHex(km.x25519EphemeralPk);
+  const kyberKemCtB64 = b64(km.kyberCiphertext);
+
+  // ML-KEM decapsulation (post-quantum half). No classical fallback in v2.
+  const kyberShared = await kyberDecapsulate(kyberKemCtB64, options.recipientSecretKeys.kyberSecB64);
+
+  // X25519 ECDH (classical half).
+  const sk = fromHex(options.recipientSecretKeys.x25519SecHex);
+  const x25519Shared = nacl.scalarMult(sk, km.x25519EphemeralPk);
+
+  const kek = combinedFileKekV2(kyberShared, x25519Shared, x25519EpkHex, kyberKemCtB64);
+  kyberShared.fill(0);
+  x25519Shared.fill(0);
+
+  const contentKey = nacl.secretbox.open(km.ckWrapped, km.ckWrapNonce, kek);
+  kek.fill(0);
+  if (!contentKey) {
+    throw new OQEError('KEY_UNWRAP_FAILED', 'Could not unwrap content key — combined-KEK authentication failed');
+  }
+
+  const aad = headerAad(header);
+  try {
+    const metadata = await decryptSection(encryptedMetadata, contentKey, header.iv, aad, 'metadata');
+    const plaintext = await aesDecrypt(encryptedContent, contentKey, header.contentIv, aad);
+    return buildResult(plaintext, metadata, 'hybrid');
+  } finally {
+    contentKey.fill(0);
+  }
+}
+
+/** LEGACY read-only: v1 either-key hybrid. Single IV, no AAD. */
+async function decryptHybridV1Legacy(
+  parsed: ParsedFile,
+  options: HybridDecryptOptions
+): Promise<OQEDecryptResult> {
+  const { header, keyMaterial, encryptedMetadata, encryptedContent } = parsed;
   const km = parseHybridKeyMaterial(keyMaterial);
 
   let contentKey: Uint8Array | null = null;
 
-  // Try Kyber first (post-quantum path)
   if (await isKyberAvailable()) {
     try {
-      // Kyber decapsulate expects base64 ciphertext
       const kyberShared = await kyberDecapsulate(
         toB64(km.kyberCiphertext),
         options.recipientSecretKeys.kyberSecB64
       );
       const kyberKek = hkdfFlex(kyberShared, 'omnituum/fs/kyber', 'wrap-content-key');
-      const unwrapped = nacl.secretbox.open(km.kyberWrappedKey, km.kyberNonce, kyberKek);
-
-      if (unwrapped) {
-        contentKey = unwrapped;
-        console.log('[OQE] Decrypted content key via Kyber (post-quantum secure)');
-      }
-    } catch (e) {
-      console.warn('[OQE] Kyber decapsulation failed, trying X25519:', e);
+      contentKey = nacl.secretbox.open(km.kyberWrappedKey, km.kyberNonce, kyberKek);
+    } catch {
+      // Fall through to the classical wrap.
     }
   }
 
-  // Fall back to X25519 (classical path)
   if (!contentKey) {
     try {
-      const ephPk = km.x25519EphemeralPk;
       const sk = fromHex(options.recipientSecretKeys.x25519SecHex);
-      const x25519Shared = nacl.scalarMult(sk, ephPk);
+      const x25519Shared = nacl.scalarMult(sk, km.x25519EphemeralPk);
       const x25519Kek = hkdfFlex(x25519Shared, 'omnituum/fs/x25519', 'wrap-content-key');
-      const unwrapped = nacl.secretbox.open(km.x25519WrappedKey, km.x25519Nonce, x25519Kek);
-
-      if (unwrapped) {
-        contentKey = unwrapped;
-        console.log('[OQE] Decrypted content key via X25519 (classical)');
-      }
-    } catch (e) {
-      console.warn('[OQE] X25519 decryption failed:', e);
+      contentKey = nacl.secretbox.open(km.x25519WrappedKey, km.x25519Nonce, x25519Kek);
+    } catch {
+      // Handled below.
     }
   }
 
@@ -110,30 +168,43 @@ async function decryptHybrid(
     throw new OQEError('KEY_UNWRAP_FAILED', 'Could not unwrap content key with provided keys');
   }
 
-  // Decrypt metadata
-  let metadata: OQEMetadata;
   try {
-    const metadataBytes = await aesDecrypt(encryptedMetadata, contentKey, header.iv);
-    metadata = parseMetadata(metadataBytes);
-  } catch (e) {
-    throw new OQEError('DECRYPTION_FAILED', 'Failed to decrypt file metadata');
+    // v1 reused header.iv for both sections; preserved for read compatibility.
+    const metadata = await decryptSection(encryptedMetadata, contentKey, header.iv, undefined, 'metadata');
+    const plaintext = await aesDecrypt(encryptedContent, contentKey, header.iv);
+    return buildResult(plaintext, metadata, 'hybrid');
+  } finally {
+    contentKey.fill(0);
   }
+}
 
-  // Decrypt file content
-  let plaintext: Uint8Array;
+async function decryptSection(
+  ciphertext: Uint8Array,
+  key: Uint8Array,
+  iv: Uint8Array,
+  aad: Uint8Array | undefined,
+  what: 'metadata'
+): Promise<OQEMetadata> {
   try {
-    plaintext = await aesDecrypt(encryptedContent, contentKey, header.iv);
-  } catch (e) {
-    throw new OQEError('DECRYPTION_FAILED', 'Failed to decrypt file content');
+    const bytes = await aesDecrypt(ciphertext, key, iv, aad);
+    return parseMetadata(bytes);
+  } catch {
+    throw new OQEError('DECRYPTION_FAILED', `Failed to decrypt file ${what}`);
   }
+}
 
+function buildResult(
+  plaintext: Uint8Array,
+  metadata: OQEMetadata,
+  mode: 'hybrid' | 'password'
+): OQEDecryptResult {
   return {
     data: plaintext,
     filename: metadata.filename,
     mimeType: metadata.mimeType,
     originalSize: metadata.originalSize,
     metadata,
-    mode: 'hybrid',
+    mode,
   };
 }
 
@@ -176,31 +247,34 @@ async function decryptPassword(
     saltLength: km.salt.length,
   });
 
-  // Decrypt metadata (also verifies password)
-  let metadata: OQEMetadata;
-  try {
-    const metadataBytes = await aesDecrypt(encryptedMetadata, contentKey, header.iv);
-    metadata = parseMetadata(metadataBytes);
-  } catch (e) {
-    throw new OQEError('PASSWORD_WRONG', 'Incorrect password or corrupted file');
-  }
+  // v2 binds the header as AAD and uses a distinct content IV; v1 reused
+  // header.iv for both sections and had no AAD.
+  const isV2 = header.version === OQE_FORMAT_VERSION_V2;
+  const aad = isV2 ? headerAad(header) : undefined;
+  const contentIv = isV2 && header.contentIv ? header.contentIv : header.iv;
 
-  // Decrypt file content
-  let plaintext: Uint8Array;
   try {
-    plaintext = await aesDecrypt(encryptedContent, contentKey, header.iv);
-  } catch (e) {
-    throw new OQEError('DECRYPTION_FAILED', 'Failed to decrypt file content');
-  }
+    // Decrypt metadata (also verifies password).
+    let metadata: OQEMetadata;
+    try {
+      const metadataBytes = await aesDecrypt(encryptedMetadata, contentKey, header.iv, aad);
+      metadata = parseMetadata(metadataBytes);
+    } catch {
+      throw new OQEError('PASSWORD_WRONG', 'Incorrect password or corrupted file');
+    }
 
-  return {
-    data: plaintext,
-    filename: metadata.filename,
-    mimeType: metadata.mimeType,
-    originalSize: metadata.originalSize,
-    metadata,
-    mode: 'password',
-  };
+    // Decrypt file content.
+    let plaintext: Uint8Array;
+    try {
+      plaintext = await aesDecrypt(encryptedContent, contentKey, contentIv, aad);
+    } catch {
+      throw new OQEError('DECRYPTION_FAILED', 'Failed to decrypt file content');
+    }
+
+    return buildResult(plaintext, metadata, 'password');
+  } finally {
+    contentKey.fill(0);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -302,9 +376,12 @@ export async function inspectOQEFile(data: FileInput): Promise<OQEFileInfo> {
   let mode: 'hybrid' | 'password';
   let algorithm: string;
 
-  if (header.algorithmSuite === ALGORITHM_SUITES.HYBRID_X25519_KYBER768_AES256GCM) {
+  if (header.algorithmSuite === ALGORITHM_SUITES.HYBRID_X25519_MLKEM1024_AES256GCM) {
     mode = 'hybrid';
-    algorithm = 'X25519 + Kyber768 + AES-256-GCM';
+    algorithm = 'X25519 + ML-KEM-1024 + AES-256-GCM (AND-combined)';
+  } else if (header.algorithmSuite === ALGORITHM_SUITES.HYBRID_X25519_KYBER768_AES256GCM) {
+    mode = 'hybrid';
+    algorithm = 'X25519 + Kyber + AES-256-GCM (legacy, either-key)';
   } else {
     mode = 'password';
     algorithm = 'Argon2id + AES-256-GCM';

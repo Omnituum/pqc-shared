@@ -35,9 +35,11 @@ import {
 
   // Version
   ENVELOPE_VERSION,
+  ENVELOPE_VERSION_V2,
   VAULT_VERSION,
   VAULT_ENCRYPTED_VERSION,
   ENVELOPE_SUITE,
+  ENVELOPE_SUITE_V2,
   ENVELOPE_AEAD,
   VAULT_KDF,
   VAULT_ALGORITHM,
@@ -155,16 +157,17 @@ async function verifyEnvelope() {
 
   const vector = loadVector('envelope');
 
-  // Version validation
+  // Version validation — hybridEncrypt writes v2 (AND-combined ckWrap)
+  // since 0.5.0; v1 is a read-only legacy format.
   assertEqual(
     vector.envelope.v,
-    ENVELOPE_VERSION,
-    `Envelope version is ${ENVELOPE_VERSION}`
+    ENVELOPE_VERSION_V2,
+    `Envelope version is ${ENVELOPE_VERSION_V2}`
   );
   assertEqual(
     vector.envelope.suite,
-    ENVELOPE_SUITE,
-    `Envelope suite is ${ENVELOPE_SUITE}`
+    ENVELOPE_SUITE_V2,
+    `Envelope suite is ${ENVELOPE_SUITE_V2}`
   );
   assertEqual(
     vector.envelope.aead,
@@ -352,6 +355,16 @@ async function verifyCrossPackageParity() {
     ENVELOPE_SUITE,
     'x25519+kyber768',
     'ENVELOPE_SUITE constant is correct'
+  );
+  assertEqual(
+    ENVELOPE_VERSION_V2,
+    'omnituum.hybrid.v2',
+    'ENVELOPE_VERSION_V2 constant is correct'
+  );
+  assertEqual(
+    ENVELOPE_SUITE_V2,
+    'x25519+mlkem1024',
+    'ENVELOPE_SUITE_V2 constant is correct'
   );
   assertEqual(
     ENVELOPE_AEAD,

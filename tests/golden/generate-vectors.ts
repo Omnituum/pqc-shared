@@ -38,7 +38,7 @@ import {
   toHex,
 
   // Version
-  ENVELOPE_VERSION,
+  ENVELOPE_VERSION_V2,
   VAULT_VERSION,
   VAULT_ENCRYPTED_VERSION,
 } from '../../dist/index.js';
@@ -153,18 +153,10 @@ async function generateEnvelopeVector(senderIdentity: any, recipientIdentity: an
     plaintext: TEST_PLAINTEXT,
     plaintextHex: toHex(new TextEncoder().encode(TEST_PLAINTEXT)),
 
-    envelope: {
-      v: envelope.v,
-      suite: envelope.suite,
-      aead: envelope.aead,
-      x25519Epk: envelope.x25519Epk,
-      x25519Wrap: envelope.x25519Wrap,
-      kyberKemCt: envelope.kyberKemCt,
-      kyberWrap: envelope.kyberWrap,
-      contentNonce: envelope.contentNonce,
-      ciphertext: envelope.ciphertext,
-      meta: envelope.meta,
-    },
+    // Store the envelope exactly as emitted — hybridEncrypt writes v2
+    // (single AND-combined ckWrap); cherry-picking v1 field names here
+    // silently dropped the wrap and produced an undecryptable vector.
+    envelope,
 
     recipient: {
       x25519PubHex: recipientIdentity.x25519PubHex,
@@ -175,7 +167,7 @@ async function generateEnvelopeVector(senderIdentity: any, recipientIdentity: an
 
     validation: {
       envelopeHash,
-      expectedVersion: ENVELOPE_VERSION,
+      expectedVersion: ENVELOPE_VERSION_V2,
       decryptedMatches: true,
     },
   };

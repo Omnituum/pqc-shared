@@ -44,8 +44,8 @@ async function loadDilithium(): Promise<any> {
     const { ml_dsa65 } = await import('@noble/post-quantum/ml-dsa.js');
     dilithiumModule = ml_dsa65;
     return dilithiumModule;
-  } catch (e) {
-    console.warn('[Dilithium] Failed to load @noble/post-quantum:', e);
+  } catch {
+    // Backend unavailable in this environment; callers handle the null return.
     return null;
   }
 }
@@ -83,8 +83,8 @@ export async function generateDilithiumKeypair(): Promise<DilithiumKeypairB64 | 
       publicB64: toB64(kp.publicKey),
       secretB64: toB64(kp.secretKey),
     };
-  } catch (e) {
-    console.warn('[Dilithium] Key generation failed:', e);
+  } catch {
+    // Never log the caught error: it can reference seed/key material.
     return null;
   }
 }

@@ -148,7 +148,7 @@ export async function generateHybridIdentity(name: string): Promise<HybridIdenti
   // Generate Kyber keypair
   const kyber = await generateKyberKeypair();
   if (!kyber) {
-    console.error('Kyber key generation failed - library not available');
+    // Backend unavailable; caller handles the null return.
     return null;
   }
 
