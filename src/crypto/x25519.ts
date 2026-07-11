@@ -126,6 +126,45 @@ export function x25519SharedSecret(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// F11 — PUBLIC-FROM-SECRET / RAW KEYPAIR-FROM-SECRET
+//
+// The two X25519 primitives pqc-shared did not previously wrap, filed as
+// F11 during the PQC-07 NaCl-boundary audit: deriving the public key for
+// an already-chosen secret (ephemeral-keypair generation) and re-deriving
+// a full keypair from a raw secret key (identity-verification / recovery
+// paths). Consumers previously reached past pqc-shared for these — this
+// closes that gap so `nacl.scalarMult.base` / `nacl.box.keyPair.fromSecretKey`
+// no longer need to appear directly in consumer source.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Derive the X25519 public key for an already-chosen 32-byte secret key
+ * (basepoint scalar multiplication) — the operation ephemeral-keypair
+ * generation needs (secret first, then its public counterpart), as
+ * opposed to `generateX25519Keypair`'s fresh-random-keypair path.
+ */
+export function x25519PublicFromSecret(secretKey: Uint8Array): Uint8Array {
+  assertLen('secret key', secretKey, 32);
+  return nacl.scalarMult.base(secretKey);
+}
+
+/**
+ * Re-derive a full X25519 keypair from a raw 32-byte secret key, with NO
+ * hashing/normalization of the input. NOT the same as
+ * `generateX25519KeypairFromSeed`, which SHA-256-hashes its seed for
+ * uniformity before deriving — that produces different bytes for the
+ * same input and is not a substitute for identity-verification or
+ * recovery paths that need the secret key echoed back byte-for-byte.
+ */
+export function x25519KeypairFromSecret(secretKey: Uint8Array): X25519Keypair {
+  assertLen('secret key', secretKey, 32);
+  return {
+    publicKey: x25519PublicFromSecret(secretKey),
+    secretKey,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HKDF KEY DERIVATION HELPER
 // ═══════════════════════════════════════════════════════════════════════════
 

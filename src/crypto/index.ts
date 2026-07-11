@@ -68,6 +68,8 @@ export {
   boxUnwrapWithX25519,
   x25519SharedSecret,
   deriveKeyFromShared,
+  x25519PublicFromSecret,
+  x25519KeypairFromSecret,
 } from './x25519';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -142,6 +144,28 @@ export {
   hybridEncrypt,
   hybridDecrypt,
   hybridDecryptToString,
+} from './hybrid';
+
+// ── CM-25/F11 misuse-resistant per-recipient hybrid content-key combiner ────
+
+export type {
+  HybridDomain,
+  HybridRecipientPub,
+  HybridRecipientSec,
+  HybridWrapContext,
+  HybridCkWrap,
+} from './hybrid';
+
+export {
+  wrapContentKeyHybrid,
+  unwrapContentKeyHybrid,
+  hybridDomain,
+  hybridRecipientId,
+  HybridError,
+  InvalidHybridDomainError,
+  InvalidKeyMaterialError,
+  InvalidContentKeyError,
+  HybridUnwrapError,
 } from './hybrid';
 
 // ═══════════════════════════════════════════════════════════════════════════

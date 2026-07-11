@@ -213,7 +213,7 @@ If any omnituum KAT byte shifts, the change is **breaking**, not additive, and *
 Freeze, with test-injected deterministic RNG (fixed ephemeral X25519 + fixed nonce):
 - **V-WRAP-1:** fixed `(x25519Pub, kyberPub, CK, domain='loggie/hybrid-v3', recipientId, ephemeral, nonce)` → fixed `HybridCkWrap`. Round-trips under the matching secrets.
 - **V-RID-1:** fixed `(x25519Pub, kyberPub)` → fixed 32-byte `recipientId` (pins §2 encoding forever).
-- **V-DOMAIN-1:** `hybridDomain` accept/reject table (valid `owner/profile`; reject empty, no-slash, two-slash, uppercase, leading/trailing dash).
+- **V-DOMAIN-1:** `hybridDomain` accept/reject table (valid `owner/profile`; reject empty, no-slash, two-slash, uppercase, leading dash on either side). The frozen grammar `^[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]*$` (§1/§10.1) requires each side to START with a lowercase alphanumeric; a TRAILING dash (e.g. `a-/b` or `a/b-`) is accepted, since `-` is a valid continuation character. (Docs-corrected 2026-07-11 to match the already-frozen regex — no grammar, vector, or implementation change; flagged by the Opus release-readiness review.)
 - **Node ≡ browser parity:** every vector above **MUST** produce byte-identical output on the Node and `.browser` twins (the combiner math is runtime-independent; only RNG/import path differ).
 - **aad vector:** V-WRAP-1 with a fixed `aad` → distinct fixed wire, proving `aad` binds.
 

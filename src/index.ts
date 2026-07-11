@@ -55,6 +55,32 @@ export type {
   HybridEnvelopeV2,
 } from './crypto/hybrid';
 
+/**
+ * @stable CM-25/F11 misuse-resistant per-recipient hybrid content-key
+ * combiner. Callers pass a content key and structured context; the KEK,
+ * both shared secrets, and all nonces stay internal. See
+ * SPEC_CM25_F11_COMBINER_EXPORT.md for the normative contract.
+ */
+export {
+  wrapContentKeyHybrid,
+  unwrapContentKeyHybrid,
+  hybridDomain,
+  hybridRecipientId,
+  HybridError,
+  InvalidHybridDomainError,
+  InvalidKeyMaterialError,
+  InvalidContentKeyError,
+  HybridUnwrapError,
+} from './crypto/hybrid';
+
+export type {
+  HybridDomain,
+  HybridRecipientPub,
+  HybridRecipientSec,
+  HybridWrapContext,
+  HybridCkWrap,
+} from './crypto/hybrid';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // KYBER (ML-KEM-1024, FIPS 203) (@stable)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -99,6 +125,8 @@ export {
   boxUnwrapWithX25519,
   x25519SharedSecret,
   deriveKeyFromShared,
+  x25519PublicFromSecret,
+  x25519KeypairFromSecret,
 } from './crypto/x25519';
 
 export type {

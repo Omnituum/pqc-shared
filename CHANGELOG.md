@@ -1,5 +1,81 @@
 # Changelog — @omnituum/pqc-shared
 
+## 0.7.0 (2026-07-11) — CM-25/F11: public per-recipient hybrid combiner + X25519 helpers
+
+Additive minor. Normative spec: `SPEC_CM25_F11_COMBINER_EXPORT.md` (repo
+root); ratified design record: loggie-sdk's `packages/core/package-docs/specs/SPEC_CM_25.md`.
+No breaking changes; `omnituum.hybrid.v2` wire is byte-identical (KAT-proven).
+
+### Added
+
+- **`wrapContentKeyHybrid(contentKey, recipientPub, ctx)` /
+  `unwrapContentKeyHybrid(wrap, recipientSec, ctx)`** — misuse-resistant
+  per-recipient AND-combined content-key wrap/unwrap. Caller passes a
+  content key and structured context (`domain`, `recipientId`, optional
+  `aad`); the ephemeral X25519 keypair, both shared secrets, the KEK, and
+  all nonces are generated/derived and zeroized internally — no live KEK
+  ever crosses the boundary. Fail-closed: every internal failure (ML-KEM
+  decapsulation, X25519 ECDH, KEK re-derivation, secretbox
+  authentication) surfaces as one opaque `HybridUnwrapError`.
+- **`hybridDomain(namespaced)`** — branded `HybridDomain` HKDF salt,
+  validated against `owner/profile` (exactly one slash, lowercase ASCII),
+  reject-not-normalize.
+- **`hybridRecipientId(pub)`** — stable 32-byte recipient identifier,
+  SHA-256 over a versioned, length-framed encoding of the recipient's
+  canonical key material. Exported so every consumer (loggie-sdk,
+  pqc-db) derives the same id rather than each inventing one.
+- **`x25519PublicFromSecret(secretKey)`** / **`x25519KeypairFromSecret(secretKey)`**
+  (F11) — the two X25519 primitives consumers previously had to reach past
+  pqc-shared for (`nacl.scalarMult.base`, `nacl.box.keyPair.fromSecretKey`).
+  Verified byte-identical to the raw tweetnacl calls; `x25519KeypairFromSecret`
+  is explicitly NOT a substitute for `generateX25519KeypairFromSeed` (which
+  hashes its input) — the two are pinned to diverge in tests.
+- Error taxonomy: `HybridError`, `InvalidHybridDomainError`,
+  `InvalidKeyMaterialError`, `InvalidContentKeyError`, `HybridUnwrapError`.
+
+### Internal (not exported)
+
+- `deriveCombinedKek` — private, parameterized KEK-derivation core shared
+  by two profile adapters: the frozen `omnituum.hybrid.v2` profile
+  (`hybridEncrypt`/`hybridDecrypt`, textual transcript, unchanged) and the
+  new public v3-shaped profile (binary, typed, length-framed transcript).
+  Replaces the module-private `combinedKekV2` — deleted, not aliased.
+- New `lint:hybrid-kek-boundary` gate: fails if a second hybrid-shaped KEK
+  derivation appears anywhere in `src/` outside `crypto/hybrid.ts`.
+  Surfaced (and allowlisted, with audit rationale) one pre-existing,
+  independently-audited-safe instance: `fs/encrypt.ts`'s `combinedFileKekV2`
+  (the `.oqe` v2 file-format's own AND-combiner, shipped in 0.6.0) — a
+  convergence candidate for a future minor, not fixed here.
+
+### Verification
+
+- Byte-identity KAT: the real pre-refactor `combinedKekV2` output for a
+  fixed tuple was captured before any change and pinned as a permanent
+  regression test; all 7 pre-existing `hybrid.test.ts` behavioral tests
+  (round-trip, AND-property both directions, transcript splice, tamper,
+  version-reject, v1-legacy-read) pass unchanged.
+- New frozen vectors match the ratified spec exactly: `V-RID-1`, `V-TX-1`
+  (no aad), `V-TX-2` (with aad).
+- Full `I-1`..`I-10` invariant matrix (withhold-either-secret both
+  directions, recipient/epk/kemCt swap, cross-domain copy, cross-recipient,
+  recipientId mismatch, array-position-is-not-identity, opaque error
+  across all failure stages) — all pass.
+- ESM/CJS build-output parity confirmed byte-identical (no `.browser.ts`
+  twins exist in this package — `platform: 'neutral'`, pure-JS deps
+  throughout — so Node/browser parity is structural here; that
+  bifurcation applies to consumers, not this package).
+- Full suite 83/83, `tsc --noEmit` clean, `pnpm build` clean (dist
+  surface confirmed to expose exactly the intended public symbols).
+
+### Deferred (explicitly, not skipped)
+
+- loggie-sdk's `scripts/lint-nacl-boundary.allowlist` reduction (rerouting
+  `nacl.scalarMult.base`/`nacl.box.keyPair.fromSecretKey` call sites to the
+  new F11 exports) cannot land until this minor is published — loggie-sdk
+  pins `@omnituum/pqc-shared` via the npm registry, not a workspace link.
+- `loggie.hybrid.v3` implementation (the registered multi-recipient wire
+  format that will consume `wrapContentKeyHybrid`) has not started.
+
 ## 0.6.0 (2026-07-07) — Security: `.oqe` file format v2 + vault integrity fix
 
 Security remediation of the file-encryption (`fs/`) module following the
