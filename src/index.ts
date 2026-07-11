@@ -125,6 +125,8 @@ export {
   boxUnwrapWithX25519,
   x25519SharedSecret,
   deriveKeyFromShared,
+  x25519PublicFromSecret,
+  x25519KeypairFromSecret,
 } from './crypto/x25519';
 
 export type {
