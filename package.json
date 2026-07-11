@@ -48,6 +48,7 @@
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
+    "lint:hybrid-kek-boundary": "bash scripts/lint-hybrid-kek-boundary.sh",
     "test:golden:generate": "pnpm -s build && tsx tests/golden/generate-vectors.ts",
     "test:golden:verify": "pnpm -s build && tsx tests/golden/verify-vectors.ts",
     "test:golden": "pnpm test:golden:verify",

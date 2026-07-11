@@ -1,0 +1,37 @@
+# lint-hybrid-kek-boundary allowlist
+# Each entry documents a PRE-EXISTING hybrid-shaped KEK derivation that was
+# manually audited and confirmed AND-combined (not the OR/PQC-09 defect)
+# before being allowlisted. Discovered while building this gate (CM-25/F11,
+# 2026-07-11) — NOT fixed in that tranche, since it touches the FROZEN .oqe
+# v2 wire format and would need its own byte-identity KAT-gate discipline,
+# same as the omnituum.hybrid.v2 refactor.
+#
+# src/fs/encrypt.ts — combinedFileKekV2(kyberShared, x25519Shared, epk, kemCt):
+#   independent implementation of the same AND-combined construction
+#   (concatenated IKM, salt 'omnituum/fs/hybrid-v2', transcript-bound info)
+#   as src/crypto/hybrid.ts's deriveCombinedKek, serving the .oqe file-
+#   encryption format instead of message envelopes. Already shipped in
+#   0.6.0 (fix(fs)!: .oqe format v2 — AND-combined KEK). Single wrap, no
+#   OR-fallback in the v2 write/read path — audited safe. src/fs/decrypt.ts
+#   correctly imports and reuses this same function (does not reimplement
+#   it a third time) for its v2 read path.
+#
+#   Architectural note for future convergence: this is a genuine instance
+#   of "one owner of the math" not yet being fully true across pqc-shared —
+#   two independent AND-combiner implementations exist (message envelope,
+#   file encryption) rather than one private core with two profile
+#   adapters. Worth a follow-up to route combinedFileKekV2 through
+#   deriveCombinedKek via a third profile adapter, proven byte-identical
+#   to the current .oqe v2 KATs first. Not required for CM-25/F11 to ship.
+src/fs/encrypt.ts
+
+# src/fs/decrypt.ts — decryptHybridV1Legacy(): the .oqe format's OWN
+# read-only legacy v1 path (independent per-primitive kyber/x25519 KEKs
+# via hkdfFlex, either secret alone suffices) — the exact analog of
+# src/crypto/hybrid.ts's unwrapCkV1. No live v1 WRITER exists (confirmed:
+# src/fs/encrypt.ts defines only encryptHybrid, the v2 AND-combined
+# writer) — this file's OR-shaped derivation only ever reads pre-existing
+# v1 .oqe files, mirroring the message-envelope legacy-read precedent.
+# decrypt.ts's v2 path correctly imports combinedFileKekV2 from encrypt.ts
+# rather than reimplementing it (see that entry above).
+src/fs/decrypt.ts
