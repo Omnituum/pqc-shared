@@ -144,6 +144,28 @@ export {
   hybridDecryptToString,
 } from './hybrid';
 
+// ── CM-25/F11 misuse-resistant per-recipient hybrid content-key combiner ────
+
+export type {
+  HybridDomain,
+  HybridRecipientPub,
+  HybridRecipientSec,
+  HybridWrapContext,
+  HybridCkWrap,
+} from './hybrid';
+
+export {
+  wrapContentKeyHybrid,
+  unwrapContentKeyHybrid,
+  hybridDomain,
+  hybridRecipientId,
+  HybridError,
+  InvalidHybridDomainError,
+  InvalidKeyMaterialError,
+  InvalidContentKeyError,
+  HybridUnwrapError,
+} from './hybrid';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PRIMITIVES (for protocol implementations like noise-kyber)
 // ═══════════════════════════════════════════════════════════════════════════
