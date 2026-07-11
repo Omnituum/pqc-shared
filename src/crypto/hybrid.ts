@@ -212,26 +212,41 @@ export function getSecretKeys(identity: HybridIdentity): HybridSecretKeys {
 // ENCRYPTION
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PRIVATE KEK CORE (CM-25 / F11) — the ONLY hybrid-KEK derivation code in
+// this package. Never exported (see SPEC_CM25_F11_COMBINER_EXPORT.md §4).
+// Two profile adapters call this: the FROZEN omnituum profile below
+// (byte-identical to the pre-refactor combinedKekV2 — see the golden KAT
+// in tests/crypto/hybrid-kek-core.test.ts) and the public v3 profile
+// (wrapContentKeyHybrid/unwrapContentKeyHybrid, further down this file).
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * Derive the v2 AND-combined KEK. Requires BOTH shared secrets; the
- * envelope's own KEM values are bound into the info string so a spliced
- * epk/kemCt from another envelope derives a different KEK and the wrap
- * fails authentication (X-Wing-style transcript binding).
+ * Derive an AND-combined KEK from both shared secrets. ikm = ss_mlkem ||
+ * ss_x25519 (fixed order, unchanged from the original combinedKekV2).
+ * `salt`/`info` are profile-specific raw bytes supplied by the calling
+ * adapter — this function has no opinion on which profile it serves.
  */
-function combinedKekV2(
-  kyberShared: Uint8Array,
-  x25519Shared: Uint8Array,
-  x25519EpkHex: string,
-  kyberKemCtB64: string
+export function deriveCombinedKek(
+  ssMlkem: Uint8Array,
+  ssX25519: Uint8Array,
+  salt: Uint8Array,
+  info: Uint8Array
 ): Uint8Array {
-  const ikm = new Uint8Array(kyberShared.length + x25519Shared.length);
-  ikm.set(kyberShared, 0);
-  ikm.set(x25519Shared, kyberShared.length);
+  const ikm = new Uint8Array(ssMlkem.length + ssX25519.length);
+  ikm.set(ssMlkem, 0);
+  ikm.set(ssX25519, ssMlkem.length);
   try {
-    return hkdfFlex(ikm, 'omnituum/hybrid-v2', `wrap-ck|${x25519EpkHex}|${kyberKemCtB64}`);
+    return hkdfSha256(ikm, { salt, info, length: 32 });
   } finally {
     ikm.fill(0);
   }
+}
+
+// ── omnituum profile adapter (FROZEN — reproduces combinedKekV2 exactly) ──
+const OMNITUUM_HYBRID_SALT = u8('omnituum/hybrid-v2');
+function omnituumHybridInfo(x25519EpkHex: string, kyberKemCtB64: string): Uint8Array {
+  return u8(`wrap-ck|${x25519EpkHex}|${kyberKemCtB64}`);
 }
 
 /**
@@ -272,7 +287,12 @@ export async function hybridEncrypt(
     const kyberKemCtB64 = b64(kyberResult.ciphertext);
 
     // 5. Single wrap under the AND-combined KEK
-    const kek = combinedKekV2(kyberResult.sharedSecret, x25519Shared, x25519EpkHex, kyberKemCtB64);
+    const kek = deriveCombinedKek(
+      kyberResult.sharedSecret,
+      x25519Shared,
+      OMNITUUM_HYBRID_SALT,
+      omnituumHybridInfo(x25519EpkHex, kyberKemCtB64)
+    );
     const ckWrapNonce = rand24();
     const ckWrapped = nacl.secretbox(CK, ckWrapNonce, kek);
     kek.fill(0);
@@ -321,7 +341,12 @@ async function unwrapCkV2(
   const sk = fromHex(secretKeys.x25519SecHex);
   const x25519Shared = nacl.scalarMult(sk, ephPk);
 
-  const kek = combinedKekV2(kyberShared, x25519Shared, envelope.x25519Epk, envelope.kyberKemCt);
+  const kek = deriveCombinedKek(
+    kyberShared,
+    x25519Shared,
+    OMNITUUM_HYBRID_SALT,
+    omnituumHybridInfo(envelope.x25519Epk, envelope.kyberKemCt)
+  );
   kyberShared.fill(0);
   x25519Shared.fill(0);
 
