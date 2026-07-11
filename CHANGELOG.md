@@ -1,6 +1,6 @@
 # Changelog — @omnituum/pqc-shared
 
-## 0.7.0 (unreleased) — CM-25/F11: public per-recipient hybrid combiner + X25519 helpers
+## 0.7.0 (2026-07-11) — CM-25/F11: public per-recipient hybrid combiner + X25519 helpers
 
 Additive minor. Normative spec: `SPEC_CM25_F11_COMBINER_EXPORT.md` (repo
 root); ratified design record: loggie-sdk's `packages/core/package-docs/specs/SPEC_CM_25.md`.
