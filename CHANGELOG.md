@@ -1,5 +1,17 @@
 # Changelog — @omnituum/pqc-shared
 
+## 0.7.1 (2026-07-20) — provenance continuity after repository-history sanitation
+
+Maintenance release. **No intended API change**; the published tree is
+byte-identical to 0.7.0 at the source level. This version exists to
+restore a fully resolvable source/provenance chain: repository history was
+sanitized to remove non-source material, which rewrote earlier commit
+identities. Immutable npm attestations for versions through 0.7.0 continue
+to reference their original commit SHAs, which no longer resolve from the
+public refs. 0.7.1 is the first release whose provenance resolves to a
+commit reachable from the rewritten history.
+
+
 ## 0.7.0 (2026-07-11) — CM-25/F11: public per-recipient hybrid combiner + X25519 helpers
 
 Additive minor. Normative spec: `SPEC_CM25_F11_COMBINER_EXPORT.md` (repo
