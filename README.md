@@ -4,7 +4,7 @@ Post-Quantum Cryptography library for hybrid encryption, identity management, an
 
 ## Features
 
-- **Hybrid Encryption** — X25519 + ML-KEM-768 (Kyber) dual-layer security
+- **Hybrid Encryption** — X25519 + ML-KEM-1024 (Kyber) dual-layer security
 - **Post-Quantum Signatures** — ML-DSA-65 (Dilithium) via `@noble/post-quantum`
 - **Identity Vault** — Encrypted storage with Argon2id key derivation
 - **File Encryption** — `.oqe` format with hybrid or password-based modes
@@ -158,7 +158,7 @@ console.log(decrypted.metadata.filename); // "document.pdf"
 | `getPublicKeys(identity)` | Extract public keys from identity |
 | `getSecretKeys(identity)` | Extract secret keys from identity |
 
-### ML-KEM-768 (Kyber)
+### ML-KEM-1024 (Kyber)
 
 | Function | Description |
 |----------|-------------|
@@ -439,7 +439,7 @@ import { ... } from '@omnituum/pqc-shared/utils';
 
 This library implements post-quantum algorithms based on NIST standards:
 
-- **ML-KEM-768** (FIPS 203) — Key encapsulation mechanism, via `kyber-crystals`
+- **ML-KEM-1024** (FIPS 203) — Key encapsulation mechanism, via `@noble/post-quantum`
 - **ML-DSA-65** (FIPS 204) — Digital signatures, via `@noble/post-quantum`
 
 Hybrid encryption combines classical (X25519, RFC 7748) and post-quantum (ML-KEM) algorithms. Both must decrypt successfully, providing defense-in-depth.
@@ -499,9 +499,8 @@ if (constantTimeEqual(hash1, hash2)) { ... }
 |---------|---------|
 | `@noble/ciphers` | ChaCha20-Poly1305 AEAD |
 | `@noble/hashes` | SHA-256, BLAKE3, HMAC, HKDF |
-| `@noble/post-quantum` | ML-DSA-65 (Dilithium) signatures |
+| `@noble/post-quantum` | ML-KEM-1024 (Kyber) KEM, ML-DSA-65 (Dilithium) signatures |
 | `hash-wasm` | Argon2id (WebAssembly) |
-| `kyber-crystals` | ML-KEM-768 (Kyber) |
 | `tweetnacl` | NaCl box/secretbox, X25519 |
 
 All dependencies are pure JavaScript/WebAssembly with no native bindings.
